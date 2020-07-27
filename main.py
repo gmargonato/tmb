@@ -16,12 +16,12 @@ Settings.ActionLogs = 0
 lifePotion = Key.F1
 healSpell = Key.F2
 manaPotion = Key.F3
-keyAtkSpell = Key.F5
-keyPoison = Key.F10
-keyFood = Key.F12
-keyRope = "o"
-keyShovel = "p"
-keyRing = "l"
+AtkSpell = Key.F5
+ExanaPox = Key.F10
+food = Key.F12
+rope = "o"
+shovel = "p"
+ring = "l"
 
 #inicio
 wp = 1
