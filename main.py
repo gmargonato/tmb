@@ -8,11 +8,6 @@ import importlib
 import json
 import datetime 
 
-#modules imports
-#function to drop unwanted items looted as free account
-global drop_module
-drop_module = importlib.import_module("drop_function")
-
 #basic sikuli configurations
 Settings.ObserveScanRate = 10
 Settings.MoveMouseDelay = 0
@@ -91,7 +86,7 @@ def walking_check(time_stopped,action_id,label,wp):
             time_stopped = 0
             
             #verify if it should engage combat while walking
-            if action_id == 0 and label == "hunt":
+            if label == "hunt" and lure_mode == 0:
                 
                 returned_color = get_pixel_color(960,77)
                 if returned_color != "3f3f3f":
@@ -140,16 +135,16 @@ def changeHandler(event):
 def waypoint_action(action_id): 
     if action_id == 1:
         type(htk_rope)
-        click(Location(555,375))
+        click(Location(640,285))
         print "Using rope"
         
     if action_id == 2:
-        click(Location(555,375))
+        click(Location(640,285))
         print "Using stairs"
 
     if action_id == 3:
         type(htk_shovel)
-        click(Location(555,375))
+        click(Location(640,285))
         print "Using shovel"
         
     wait(1)
@@ -188,7 +183,7 @@ def attacking():
     healer_function()
     
     returned_color = get_pixel_color(932,60)
-    if (returned_color == 'ff0000' or returned_color == 'ff7f7d'): #red or red-whitish
+    if (returned_color == 'ff0000' or returned_color == 'ff7f7d'): #red or whitish-red
         wait(1)
         attacking()
 
@@ -209,18 +204,22 @@ def attacking():
 ########  #######   #######     ##       ##    ######## ##     ## 
 #################################################################
 
+#1 2 3
+#8 9 4
+#7 6 5
+
 def looter_function():
     print "looting corpses around char"
-    #8 means each click will have KeyModifier.ALT
-    click(Location(500,315),8) 
-    click(Location(550,315),8)
-    click(Location(600,315),8)
-    click(Location(600,365),8)
-    click(Location(600,415),8)
-    click(Location(555,410),8)
-    click(Location(500,410),8)
-    click(Location(505,365),8)
-    click(Location(555,375),8)
+    #8 means each click have KeyModifier.ALT
+    click(Location(606,250),8) #1
+    click(Location(640,250),8) #2
+    click(Location(670,250),8) #3
+    click(Location(670,283),8) #4
+    click(Location(670,315),8) #5
+    click(Location(640,315),8) #6
+    click(Location(606,315),8) #7
+    click(Location(606,285),8) #8
+    click(Location(640,285),8) #9
     
 ########################################################    
 ##     ## ########    ###    ##       ######## ########  
@@ -237,17 +236,16 @@ def healer_function():
     #life checker
 
     #50% of life - uses potion
-    returned_color = get_pixel_color(367,51)
-    if returned_color == "232423": type(htk_life_pot)
+    returned_color = get_pixel_color(1172,166)
+    if returned_color != "922d2b": type(htk_life_pot)
 
     #85% of life - uses spell
-    returned_color = get_pixel_color(437,51)
-    if returned_color == "282929": type(htk_life_spell)
+    returned_color = get_pixel_color(1192,166)
+    if returned_color != "922d2b": type(htk_life_spell)
         
     #mana checker
-    returned_color = get_pixel_color(693,51)    
-    if returned_color != '004bb0': 
-        type(htk_mana_pot)
+    returned_color = get_pixel_color(1172,179)    
+    if returned_color != '2e2893': type(htk_mana_pot)
 
     return
         
@@ -269,6 +267,7 @@ def statusBar_check():
     if statusBar.exists("food.png"):type(htk_food)
     if statusBar.exists("poison.png"):type(htk_heal_poison)
     if equip_ring == 1: equip_ring_checker()
+    if refill_ammo == 1: ammo_refiller()
     else: return
 
 #function to equip ring
@@ -277,10 +276,18 @@ def equip_ring_checker():
     #defines ring region
     ring_slot = Region(1106,246,45,41)
     
-    if ring_slot.exists(Pattern("ring_slot.png").exact()):
+    if ring_slot.exists(Pattern("1600737151840.png").exact()):
         print "equipping ring"
         type(htk_ring)
     else:return
+    
+#function to refill ammo
+def ammo_refiller():
+    #defines ammo region
+    ammo_slot = Region(1184,278,38,34)
+    if ammo_slot.exists(Pattern("1600737164621.png").exact()):
+        print "refilling ammo"
+        type(htk_ammo)
 
 #########################################################################
   ######  ######## ##       ########  ######  ########  #######  ########  
@@ -295,13 +302,7 @@ def equip_ring_checker():
 def script_selector_function():
     script_list = (
             "-nothing selected-",
-            "[ROOK] Poison Spider",
-            "[ROOK] Bear Cave",
-            "[ROOK] Mino Hell v1",
-            "[EK] Forest Fury v2",
-            "[EK] DLair Kazz",
-            "[EK] Wyvern Venore",
-            "[EK] Stonerefiner"
+            "[ROOK] Poison Spider"
     )
     prompt = select("Please select a script from the list","Available Scripts", options = script_list)
 
@@ -313,53 +314,31 @@ def script_selector_function():
     if prompt == script_list[1]:
         selected_script = "rook_psc"
         script_loader(selected_script)
-        
-    if prompt == script_list[2]:
-        selected_script = "rook_bear"
-        script_loader(selected_script)
-        
-    if prompt == script_list[3]:
-        selected_script = "rook_mino_hell"
-        script_loader(selected_script)
-
-    if prompt == script_list[4]:
-        selected_script = "forest_fury"
-        script_loader(selected_script)
-
-    if prompt == script_list[5]:
-        selected_script = "dragon_kazz"
-        script_loader(selected_script)
-
-    if prompt == script_list[6]:
-        selected_script = "venore_wyvern"
-        script_loader(selected_script)
-
-    if prompt == script_list[7]:
-        selected_script = "stonerefiner"
-        script_loader(selected_script)
 
 #loads basic configuration from selected script
 def script_loader(selected_script):
 
     global imported_script
     global take_loot
-    global drop_items
+    global lure_mode
     global equip_ring
+    global refill_ammo
+    global minimap_zoom
     global last_hunt_wp
     global last_leave_wp
-    global minimap_zoom
     
     print "Selected Script:",selected_script  
     #imports the script that will be executed on this session
     imported_script = importlib.import_module(selected_script)
            
     #reads the value from the import script
-    take_loot = imported_script.take_loot
-    drop_items = imported_script.drop_items
-    equip_ring = imported_script.equip_ring
-    last_hunt_wp = imported_script.last_hunt_wp
+    take_loot     = imported_script.take_loot
+    lure_mode     = imported_script.lure_mode
+    equip_ring    = imported_script.equip_ring
+    refill_ammo   = imported_script.refill_ammo
+    minimap_zoom  = imported_script.minimap_zoom
+    last_hunt_wp  = imported_script.last_hunt_wp
     last_leave_wp = imported_script.last_leave_wp
-    minimap_zoom = imported_script.minimap_zoom
 
 ##########################################################
 #     ## #### ##    ## #### ##     ##    ###    ########  
@@ -404,10 +383,11 @@ htk_food        = Key.F12
 htk_rope        = "o"
 htk_shovel      = "p"
 htk_ring        = "l"
+htk_ammo        = "r"
 
 #in case ping latency is too high, increase the waiting time
-    #1 = low latency, very fast
-    #2 or more = medium to high latency
+#use 1 for low latency
+#use 2 or more from medium to high latency
 global walk_lag_delay 
 walk_lag_delay = 2
 
@@ -416,12 +396,15 @@ wp = 1
 label = "hunt"
 
 #calls script selector
+print "[INITIALIZING] Loading Available Scripts..."
 script_selector_function()
-print "[STARTING EXECUTION]"
 App.focus("Tibia")
 
 #shows ping on game screen
 type(Key.F8, KeyModifier.ALT)
+
+#mute system
+subprocess.Popen(['osascript', '-e', 'set Volume 0'])
 
 #adjusts the minimap zoom
 minimap_adjustment()
@@ -438,6 +421,10 @@ minimap_adjustment()
 
 #Main
 while True:
+
+    hover(Location(640,285))
+    attack_function()
+    statusBar_check()
     
     try: 
         waypointer(label,wp)
@@ -445,7 +432,7 @@ while True:
         
         #########################################
         #current waypoint is the last one for hunt
-        if (label == "hunt" and wp == last_hunt_wp):
+        if (label == "hunt" and wp >= last_hunt_wp):
             
             #check if it should leave the hunt
             print "Checking for exit status..."
@@ -454,10 +441,10 @@ while True:
             
         ##########################################
         #current waypoint is the last one for leave
-        elif label == "leave" and wp == last_leave_wp:
+        elif label == "leave" and wp >= last_leave_wp:
             
             #check if there is battle-on icon
-            statusBar = Region(499,82,106,13)
+            statusBar = Region(1111,335,110,14)
             if statusBar.exists("battleon.png"):
                 waitVanish("battleon.png",30)
                 logoff_function()
