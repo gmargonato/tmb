@@ -135,16 +135,16 @@ def changeHandler(event):
 def waypoint_action(action_id): 
     if action_id == 1:
         type(htk_rope)
-        click(Location(640,285))
+        click(Location(screen_center_x,screen_center_y))
         print "Using rope"
         
     if action_id == 2:
-        click(Location(640,285))
+        click(Location(screen_center_x,screen_center_y))
         print "Using stairs"
 
     if action_id == 3:
         type(htk_shovel)
-        click(Location(640,285))
+        click(Location(screen_center_x,screen_center_y))
         print "Using shovel"
         
     wait(1)
@@ -210,16 +210,15 @@ def attacking():
 
 def looter_function():
     print "looting corpses around char"
-    #8 means each click have KeyModifier.ALT
-    click(Location(606,250),8) #1
-    click(Location(640,250),8) #2
-    click(Location(670,250),8) #3
-    click(Location(670,283),8) #4
-    click(Location(670,315),8) #5
-    click(Location(640,315),8) #6
-    click(Location(606,315),8) #7
-    click(Location(606,285),8) #8
-    click(Location(640,285),8) #9
+    click(Location(600,275),8) #1
+    click(Location(640,275),8) #2
+    click(Location(675,275),8) #3
+    click(Location(675,310),8) #4
+    click(Location(675,345),8) #5
+    click(Location(640,345),8) #6
+    click(Location(600,345),8) #7
+    click(Location(600,310),8) #8
+    click(Location(645,310),8) #9
     
 ########################################################    
 ##     ## ########    ###    ##       ######## ########  
@@ -351,18 +350,12 @@ def script_loader(selected_script):
 ##########################################################
 
 def minimap_adjustment():
-    click(Location(1240,128))
-    click(Location(1240,128))
-    click(Location(1240,128))
-
+    for index in range(2):
+        click(Location(1240,128))
     print "adjusting minimap to zoom:",minimap_zoom
-
-    if minimap_zoom == 1:
+    for index in range(minimap_zoom):       
         click(Location(1240,110))
-
-    if minimap_zoom == 2:
-        click(Location(1240,110))
-        click(Location(1240,110))
+    return
 
 ############################################################
  ######   #######  ##    ## ######## ####  ######    ######  
@@ -373,6 +366,12 @@ def minimap_adjustment():
 ##    ## ##     ## ##   ### ##        ##  ##    ##  ##    ## 
  ######   #######  ##    ## ##       ####  ######    ######  
 ############################################################
+
+#center of screen
+global screen_center_x
+global screen_center_y
+screen_center_x = 645
+screen_center_y = 310
 
 #hotkey presets
 htk_life_pot    = Key.F1
@@ -389,7 +388,7 @@ htk_ammo        = "r"
 #use 1 for low latency
 #use 2 or more from medium to high latency
 global walk_lag_delay 
-walk_lag_delay = 2
+walk_lag_delay = 1
 
 #starting waypoint configuration
 wp = 1
@@ -421,8 +420,8 @@ minimap_adjustment()
 
 #Main
 while True:
-
-    hover(Location(640,285))
+    
+    hover(Location(screen_center_x,screen_center_y))
     attack_function()
     statusBar_check()
     
