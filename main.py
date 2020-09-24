@@ -61,18 +61,17 @@ def waypointer(label,wp):
     print "Walking to [",label,"] waypoint",wp
     
     if label == "hunt":
-        action_id = imported_script.label_hunt(wp)
+        wp_action = imported_script.label_hunt(wp)
         
     if label == "leave":
-        action_id = imported_script.label_leave(wp)
+        wp_action = imported_script.label_leave(wp)
 
-    #checks if I stopped or continued walking
-    walking_check(0,action_id,label,wp)
+    #checks if the Char has stopped or continues walking
+    walking_check(0,wp_action,label,wp)
+    
+    return wp_action
  
-    #verifies if should perform some action when reaches destination
-    if action_id > 0:waypoint_action(action_id)
-
-def walking_check(time_stopped,action_id,label,wp):
+def walking_check(time_stopped,wp_action,label,wp):
     while True:
         #defines the minimap watchable region
         nav = Region(1111,47,110,115)
@@ -85,7 +84,7 @@ def walking_check(time_stopped,action_id,label,wp):
             
             time_stopped = 0
             
-            #verify if it should engage combat while walking
+            #verifies if it should engage combat while walking
             if label == "hunt" and lure_mode == 0:
                 
                 returned_color = get_pixel_color(960,77)
@@ -126,30 +125,30 @@ def changeHandler(event):
  ###  ###  ##           ##     ##  ######     ##    ####  #######  ##    ##  ######  
 ####################################################################################
 
-#action_id list:
+#wp_action list:
         #0: indicates its a normal waypoint
         #1: indicates a rope must be used on char's position
         #2: indicates a stair must be used on char's position
         #3: indicates a shovel must be used on char's position
 
-def waypoint_action(action_id): 
-    if action_id == 1:
+def waypoint_action(wp_action): 
+    if wp_action == 1:
         type(htk_rope)
         click(Location(screen_center_x,screen_center_y))
         print "Using rope"
         
-    if action_id == 2:
+    if wp_action == 2:
         click(Location(screen_center_x,screen_center_y))
         print "Using stairs"
 
-    if action_id == 3:
+    if wp_action == 3:
         type(htk_shovel)
         click(Location(screen_center_x,screen_center_y))
         print "Using shovel"
-        
+
     wait(1)
-    return  
-    
+    return
+
 ##########################################################################
    ###    ######## ########    ###     ######  ##    ## ######## ########  
   ## ##      ##       ##      ## ##   ##    ## ##   ##  ##       ##     ## 
@@ -387,11 +386,12 @@ htk_ammo        = "r"
 #in case ping latency is too high, increase the waiting time
 #use 1 for low latency
 #use 2 or more from medium to high latency
+#ATTENTION: use only integer values
 global walk_lag_delay 
-walk_lag_delay = 1
+walk_lag_delay = 2
 
 #starting waypoint configuration
-wp = 1
+wp = 20
 label = "hunt"
 
 #calls script selector
@@ -420,13 +420,16 @@ minimap_adjustment()
 
 #Main
 while True:
-    
+
     hover(Location(screen_center_x,screen_center_y))
     attack_function()
     statusBar_check()
     
     try: 
-        waypointer(label,wp)
+        wp_action = waypointer(label,wp)
+        #verifies if should perform some action when reaches destination
+        if wp_action > 0:
+            waypoint_action(wp_action)
         print "Arrived at",label,"waypoint",wp
         
         #########################################
