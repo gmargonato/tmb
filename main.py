@@ -4,9 +4,13 @@
 import os
 import subprocess
 import re
+import math
 import importlib
 import json
-import datetime 
+from datetime import *
+from javax.swing import JFrame, JButton, JLabel
+from java.awt.BorderLayout import *
+from sikuli import *
 
 #basic sikuli configurations
 Settings.ObserveScanRate = 10
@@ -24,9 +28,11 @@ Settings.ActionLogs = 0
 ###########################################################
 
 def logoff_function():
+    print "Printing Screen"
     type("3", KeyModifier.CMD + KeyModifier.SHIFT)
     type("l", KeyModifier.CMD)
     print "[TERMINATING EXECUTION]"
+    message.setText("[END OF EXECUTION]")
     type("c", KeyModifier.CMD + KeyModifier.SHIFT)
 
 #############################################################################################
@@ -59,6 +65,7 @@ def get_pixel_color(posX,posY):
 def waypointer(label,wp):
 
     print "Walking to [",label,"] waypoint",wp
+    message.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Walking to "+label+" waypoint "+str(wp))
     
     if label == "hunt":
         wp_action = imported_script.label_hunt(wp)
@@ -86,7 +93,8 @@ def walking_check(time_stopped,wp_action,label,wp):
             
             #verifies if it should engage combat while walking
             if label == "hunt" and lure_mode == 0:
-                
+
+                message.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Checking battle list while walking...")
                 returned_color = get_pixel_color(960,77)
                 if returned_color != "3f3f3f":
                     #if enters here, press Esc to stop movement
@@ -136,15 +144,18 @@ def waypoint_action(wp_action):
         type(htk_rope)
         click(Location(screen_center_x,screen_center_y))
         print "Using rope"
+        message.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Using rope")
         
     if wp_action == 2:
         click(Location(screen_center_x,screen_center_y))
         print "Using stairs"
+        message.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Using stairs")
 
     if wp_action == 3:
         type(htk_shovel)
         click(Location(screen_center_x,screen_center_y))
         print "Using shovel"
+        message.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Using shovel")
 
     wait(1)
     return
@@ -163,25 +174,31 @@ def attack_function():
 
     returned_color = get_pixel_color(960,77)
     if returned_color == "3f3f3f": 
-        print "battlelist is clear"
+        print "Clear battle list"
+        message.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Battlelist is clear, continuing...")
         return
     
     else:
         print "monster detected on screen"
+        message.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Monster detected on screen")
         type(Key.SPACE)        
         attacking()
+        message.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Mob died")
         #wait untill mob is dead to get it's loot
-        if take_loot == 1: looter_function()
+        if take_loot == 1: melee_looter()
         #call function again to check if there is another mob on the battlelist
+        message.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Checking if there is another mob on List")
         attack_function()
 
 #function to verify if I am attacking a mob
 def attacking():
 
     #verifies my health and mana situation
+    message.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Checking health and mana")
     healer_function()
-    
+
     returned_color = get_pixel_color(932,60)
+    message.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Attacking...")
     if (returned_color == 'ff0000' or returned_color == 'ff7f7d'): #red or whitish-red
         wait(1)
         attacking()
@@ -189,9 +206,10 @@ def attacking():
     if returned_color == 'ffffff': #white
        type(Key.SPACE)
        attacking()
-        
-    else:return
-#
+
+    message.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Exiting attack loop")
+    return
+
 
 #################################################################
 ##        #######   #######  ######## ######## ######## ########  
@@ -203,12 +221,13 @@ def attacking():
 ########  #######   #######     ##       ##    ######## ##     ## 
 #################################################################
 
-#1 2 3
-#8 9 4
-#7 6 5
-
-def looter_function():
+#MELEE
+def melee_looter():
+    #1 2 3
+    #8 9 4
+    #7 6 5
     print "looting corpses around char"
+    message.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Looting corpses around char")
     click(Location(600,275),8) #1
     click(Location(640,275),8) #2
     click(Location(675,275),8) #3
@@ -265,7 +284,6 @@ def statusBar_check():
     if statusBar.exists("food.png"):type(htk_food)
     if statusBar.exists("poison.png"):type(htk_heal_poison)
     if equip_ring == 1: equip_ring_checker()
-    if refill_ammo == 1: ammo_refiller()
     else: return
 
 #function to equip ring
@@ -276,17 +294,10 @@ def equip_ring_checker():
     
     if ring_slot.exists(Pattern("1600737151840.png").exact()):
         print "equipping ring"
+        message.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Equipping Ring")
         type(htk_ring)
     else:return
     
-#function to refill ammo
-def ammo_refiller():
-    #defines ammo region
-    ammo_slot = Region(1184,278,38,34)
-    if ammo_slot.exists(Pattern("1600737164621.png").exact()):
-        print "refilling ammo"
-        type(htk_ammo)
-
 #########################################################################
   ######  ######## ##       ########  ######  ########  #######  ########  
 ##    ## ##       ##       ##       ##    ##    ##    ##     ## ##     ## 
@@ -300,13 +311,14 @@ def ammo_refiller():
 def script_selector_function():
     script_list = (
             "-nothing selected-",
-            "[ROOK] Poison Spider"
+            "[RK] Rook PSC"
     )
     prompt = select("Please select a script from the list","Available Scripts", options = script_list)
 
     if prompt == script_list[0]:
         popup("You did not choose a script - Terminating!")
         print "[TERMINATING EXECUTION]"
+        message.setText("[END OF EXECUTION]")
         type('c', KeyModifier.CMD + KeyModifier.SHIFT)
         
     if prompt == script_list[1]:
@@ -325,11 +337,12 @@ def script_loader(selected_script):
     global last_hunt_wp
     global last_leave_wp
     
-    print "Selected Script:",selected_script  
+    print "Selected Script:",selected_script
     #imports the script that will be executed on this session
     imported_script = importlib.import_module(selected_script)
            
     #reads the value from the import script
+    combat_mode   = imported_script.combat_mode
     take_loot     = imported_script.take_loot
     lure_mode     = imported_script.lure_mode
     equip_ring    = imported_script.equip_ring
@@ -349,12 +362,19 @@ def script_loader(selected_script):
 ##########################################################
 
 def minimap_adjustment():
-    for index in range(2):
-        click(Location(1240,128))
+    click(Location(1240,128))
+    click(Location(1240,128))
+    click(Location(1240,128))
+
     print "adjusting minimap to zoom:",minimap_zoom
-    for index in range(minimap_zoom):       
+    message.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Adjusting minimap to zoom: "+str(minimap_zoom))
+
+    if minimap_zoom == 1:
         click(Location(1240,110))
-    return
+
+    if minimap_zoom == 2:
+        click(Location(1240,110))
+        click(Location(1240,110))
 
 ############################################################
  ######   #######  ##    ## ######## ####  ######    ######  
@@ -374,14 +394,15 @@ screen_center_y = 310
 
 #hotkey presets
 htk_life_pot    = Key.F1
-htk_life_spell  = Key.F2
-htk_mana_pot    = Key.F3
+htk_life_spell  = "1"
+htk_mana_pot    = "3"
 htk_heal_poison = Key.F10
 htk_food        = Key.F12
 htk_rope        = "o"
 htk_shovel      = "p"
 htk_ring        = "l"
 htk_ammo        = "r"
+htk_haste       = "4"
 
 #in case ping latency is too high, increase the waiting time
 #use 1 for low latency
@@ -391,11 +412,21 @@ global walk_lag_delay
 walk_lag_delay = 2
 
 #starting waypoint configuration
-wp = 20
+wp = 1
 label = "hunt"
 
+#FRAME
+frame = JFrame("Console Log")
+frame.setLocation(360,630)
+frame.setSize(550,140)
+frame.visible = True
+frame.setAlwaysOnTop(True)
+#Sets initial text
+message = JLabel("")
+frame.add(message,CENTER)
+message.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"[INITIALIZING BOT]")
+
 #calls script selector
-print "[INITIALIZING] Loading Available Scripts..."
 script_selector_function()
 App.focus("Tibia")
 
@@ -421,8 +452,11 @@ minimap_adjustment()
 #Main
 while True:
 
-    hover(Location(screen_center_x,screen_center_y))
-    attack_function()
+    #makes console frame appear again (it was vanishing after a while)
+    frame.visible = True
+    
+    #hover(Location(screen_center_x,screen_center_y))
+    if label == "hunt": attack_function()
     statusBar_check()
     
     try: 
@@ -431,13 +465,15 @@ while True:
         if wp_action > 0:
             waypoint_action(wp_action)
         print "Arrived at",label,"waypoint",wp
+        message.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Arrived at "+label+" waypoint "+str(wp))
         
         #########################################
         #current waypoint is the last one for hunt
         if (label == "hunt" and wp >= last_hunt_wp):
             
             #check if it should leave the hunt
-            print "Checking for exit status..."
+            print "Checking for exit conditions..."
+            message.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Checking for exit conditions...")
             label = imported_script.check_exit()
             wp = 1
             
@@ -458,6 +494,7 @@ while True:
     
     except:
         print "[ATTENTION] Waypoint",wp,"not found for",label
+        message.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"[ATTENTION] Waypoint "+str(wp)+" not found for "+label)
         wp+=1
         pass
 
