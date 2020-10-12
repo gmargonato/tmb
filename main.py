@@ -8,7 +8,7 @@ import math
 import importlib
 import json
 from datetime import *
-from javax.swing import JFrame, JButton, JLabel
+from javax.swing import JFrame, JButton, JLabel, JScrollPane, JTextArea, JPanel
 from java.awt.BorderLayout import *
 from sikuli import *
 
@@ -28,12 +28,26 @@ Settings.ActionLogs = 0
 ###########################################################
 
 def logoff_function():
-    print "Printing Screen"
-    type("3", KeyModifier.CMD + KeyModifier.SHIFT)
-    type("l", KeyModifier.CMD)
-    print "[TERMINATING EXECUTION]"
-    messageCENTER.setText("[END OF EXECUTION]")
-    type("c", KeyModifier.CMD + KeyModifier.SHIFT)
+
+    statusBar = Region(1111,335,110,14)
+    
+    if statusBar.exists("battleon.png"):
+        textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Battle icon on - Waiting 30 secs"+"\n")
+        textArea.setCaretPosition(textArea.getDocument().getLength())
+        wait(30)
+        textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Trying to logoff again..."+"\n")
+        textArea.setCaretPosition(textArea.getDocument().getLength())
+        logoff_function()
+        
+    else:
+        textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Printing Screen"+"\n")
+        textArea.setCaretPosition(textArea.getDocument().getLength())
+        type("3", KeyModifier.CMD + KeyModifier.SHIFT)
+        type("l", KeyModifier.CMD)
+        textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"[END OF EXECUTION]"+"\n")
+        textArea.setCaretPosition(textArea.getDocument().getLength())
+    
+        type("c", KeyModifier.CMD + KeyModifier.SHIFT)
 
 #############################################################################################
 ########  #### ##     ## ######## ##           ######   #######  ##        #######  ########  
@@ -49,8 +63,10 @@ def logoff_function():
 def get_pixel_color(posX,posY):   
     command = "screencapture -R"+str(posX)+","+str(posY)+",1,1 -t bmp $TMPDIR/test.bmp && xxd -p -l 3 -s 54 $TMPDIR/test.bmp | sed 's/\\(..\\)\\(..\\)\\(..\\)/\\3\\2\\1/'"
     color = re.sub(r"\s+", "", os.popen(command).read(), flags=re.UNICODE)
-    messageBOTTOM.setText("Last Analyzed Pixel: "+color)
 
+    #textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Pixel Analyzed: "+color+"\n")
+    #textArea.setCaretPosition(textArea.getDocument().getLength())
+    
     return color
 
 ###########################################################################################
@@ -66,8 +82,11 @@ def get_pixel_color(posX,posY):
 #function to walk to next waypoint
 def waypointer(label,wp):
 
-    print "Walking to [",label,"] waypoint",wp
-    messageCENTER.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Walking to "+label+" waypoint "+str(wp))
+    textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Walking to "+label+" waypoint "+str(wp)+"\n")
+    textArea.setCaretPosition(textArea.getDocument().getLength())
+    
+    if label == "go_hunt":
+        wp_action = imported_script.label_go_hunt(wp)
     
     if label == "hunt":
         wp_action = imported_script.label_hunt(wp)
@@ -96,9 +115,11 @@ def walking_check(time_stopped,wp_action,label,wp):
             #verifies if it should engage combat while walking
             if label == "hunt" and lure_mode == 0:
 
-                messageCENTER.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Checking battle list while walking...")
                 returned_color = get_pixel_color(960,77)
                 if returned_color != "3f3f3f": #means there is a mob on battle list
+                    textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Mob detected while walking"+"\n")
+                    textArea.setCaretPosition(textArea.getDocument().getLength())
+
                     #press ESC to stop movement
                     type(Key.ESC)
                     wait(0.5)
@@ -147,20 +168,23 @@ def waypoint_action(wp_action):
     if wp_action == 1:
         type(htk_rope)
         click(Location(screen_center_x,screen_center_y))
-        print "Using rope"
-        messageCENTER.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Using rope")
+        textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Action 1 - Using rope"+"\n")
+        textArea.setCaretPosition(textArea.getDocument().getLength())
+
         
     if wp_action == 2:
         click(Location(screen_center_x,screen_center_y))
-        print "Using stairs"
-        messageCENTER.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Using stairs")
+        textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Action 2 - Using ladder"+"\n")
+        textArea.setCaretPosition(textArea.getDocument().getLength())
 
+        
     if wp_action == 3:
         type(htk_shovel)
         click(Location(screen_center_x,screen_center_y))
-        print "Using shovel"
-        messageCENTER.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Using shovel")
+        textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Action 3 - Using shovel"+"\n")
+        textArea.setCaretPosition(textArea.getDocument().getLength())
 
+        
     wait(1)
     return
 
@@ -178,43 +202,48 @@ def attack_function():
 
     returned_color = get_pixel_color(960,77)
     if returned_color == "3f3f3f": 
-        print "Battle list is clear"
-        messageCENTER.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Battlelist is clear, continuing...")
+        textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Battle list is clear"+"\n")
+        textArea.setCaretPosition(textArea.getDocument().getLength())
         return
     
     else:
-        print "monster detected on screen"
-        messageCENTER.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Monster detected on screen")
+        textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Monster detected on screen"+"\n")
+        textArea.setCaretPosition(textArea.getDocument().getLength())
         type(Key.SPACE)        
-        attacking()
-        messageCENTER.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Mob died")
-        #wait untill mob is dead to get it's loot
+        attacking(0,1)
+        #wait untill mob is dead to get loot
         if take_loot == 1: melee_looter()
-        #call function again to check if there is another mob on the battlelist
-        messageCENTER.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Checking if there is another mob on List")
+        #call function again to check if there is another mob on the battle list
         attack_function()
 
 
-#function to verify if attacking a mob
-def attacking():
+#function to verify if its currently attacking a mob
+def attacking(slot,atkCount):
 
-    #verifies my health and mana situation
-    messageCENTER.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Checking health and mana")
+    #textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Attacking slot "+str(slot)+" - "+str(atkCount)+"/30 \n")
+    #textArea.setCaretPosition(textArea.getDocument().getLength())
+
+    #verifies health and mana
     healer_function()
 
-    returned_color = get_pixel_color(932,60)
-    messageCENTER.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Attacking...")
+    if atkCount >= 30:
+        textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Trap or unreachable - Switching Target \n")
+        textArea.setCaretPosition(textArea.getDocument().getLength())
+        type(Key.SPACE)
+        slot+=1
+        atkCount=0
+
+    #distance between slots is 22 pixels
+    returned_color = get_pixel_color(932,60+(slot*22))
+      
     if (returned_color == 'ff0000' or returned_color == 'ff7f7d'): #red or whitish-red
-        wait(1)
-        attacking()
+        attacking(slot,atkCount+1)
 
-    if returned_color == 'ffffff': #white
-       type(Key.SPACE)
-       attacking()
+    if returned_color == 'ffffff':
+        type(Key.SPACE)
+        attacking(0,1)
 
-    messageCENTER.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Exiting attack loop")
-    return
-
+    else: return
 
 #################################################################
 ##        #######   #######  ######## ######## ######## ########  
@@ -228,11 +257,12 @@ def attacking():
 
 #MELEE
 def melee_looter():
+    textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Looting around char"+"\n")
+    textArea.setCaretPosition(textArea.getDocument().getLength())
+
     #1 2 3
     #8 9 4
     #7 6 5
-    print "looting corpses around char"
-    messageCENTER.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Looting corpses around char")
     click(Location(600,275),8) #1
     click(Location(640,275),8) #2
     click(Location(675,275),8) #3
@@ -255,18 +285,16 @@ def melee_looter():
 
 def healer_function():
 
-    #life checker
-
-    #50% of life - uses potion
+    #Life < 50%
     returned_color = get_pixel_color(1172,166)
     if returned_color != "922d2b": type(htk_life_pot)
 
-    #85% of life - uses spell
+    #Life < 85%
     returned_color = get_pixel_color(1192,166)
     if returned_color != "922d2b": type(htk_life_spell)
-        
-    #mana checker
-    returned_color = get_pixel_color(1172,179)    
+    
+    #Mana < 50%
+    returned_color = get_pixel_color(1172,179)  
     if returned_color != '2e2893': type(htk_mana_pot)
 
     return
@@ -282,7 +310,6 @@ def healer_function():
 ###########################################################################
 
 def statusBar_check():
-    messageCENTER.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Checking debuffs...")
 
     #defines status bar region to reduce search
     statusBar = Region(499,82,106,13)
@@ -298,10 +325,7 @@ def equip_ring_checker():
     #defines ring region
     ring_slot = Region(1106,246,45,41)
     
-    if ring_slot.exists(Pattern("1600737151840.png").exact()):
-        print "equipping ring"
-        messageCENTER.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Equipping Ring")
-        type(htk_ring)
+    if ring_slot.exists(Pattern("empty_ring.png").exact()):type(htk_ring)
     else:return
     
 #########################################################################
@@ -319,14 +343,15 @@ def script_selector_function():
             "-nothing selected-",
             "[RK] Rook PSC",
             "[RK] Rook Mino Hell",
+            "[RK] Rook Troll PA",
             "[EK] Amazon Camp"
     )
     prompt = select("Please select a script from the list","Available Scripts", options = script_list, default = script_list[0])
 
     if prompt == script_list[0]:
         popup("You did not choose a script - Terminating!")
-        print "[TERMINATING EXECUTION]"
-        messageCENTER.setText("[END OF EXECUTION]")
+        textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"[WARNING] No Script Selected \n [END OF EXECUTION]")
+        textArea.setCaretPosition(textArea.getDocument().getLength())
         type('c', KeyModifier.CMD + KeyModifier.SHIFT)
         
     if prompt == script_list[1]:
@@ -338,6 +363,11 @@ def script_selector_function():
         script_loader(selected_script)
 
     if prompt == script_list[3]:
+        selected_script = "rook_troll"
+        script_loader(selected_script)
+
+
+    if prompt == script_list[4]:
         selected_script = "amazon_camp"
         script_loader(selected_script)
 
@@ -352,20 +382,24 @@ def script_loader(selected_script):
     global minimap_zoom
     global last_hunt_wp
     global last_leave_wp
+    global last_go_hunt_wp
     
-    print "Selected Script:",selected_script
+    textArea.append("[CORE] Selected Script: "+selected_script+"\n")
+    textArea.setCaretPosition(textArea.getDocument().getLength())
+
     #imports the script that will be executed on this session
     imported_script = importlib.import_module(selected_script)
            
     #reads the value from the import script
-    combat_mode   = imported_script.combat_mode
-    take_loot     = imported_script.take_loot
-    lure_mode     = imported_script.lure_mode
-    equip_ring    = imported_script.equip_ring
-    refill_ammo   = imported_script.refill_ammo
-    minimap_zoom  = imported_script.minimap_zoom
-    last_hunt_wp  = imported_script.last_hunt_wp
-    last_leave_wp = imported_script.last_leave_wp
+    combat_mode     = imported_script.combat_mode
+    take_loot       = imported_script.take_loot
+    lure_mode       = imported_script.lure_mode
+    equip_ring      = imported_script.equip_ring
+    refill_ammo     = imported_script.refill_ammo
+    minimap_zoom    = imported_script.minimap_zoom
+    last_hunt_wp    = imported_script.last_hunt_wp
+    last_leave_wp   = imported_script.last_leave_wp
+    last_go_hunt_wp = imported_script.last_go_hunt_wp
 
 ##########################################################
  #     ## #### ##    ## #### ##     ##    ###    ########  
@@ -378,45 +412,17 @@ def script_loader(selected_script):
 ##########################################################
 
 def minimap_adjustment():
+    textArea.append("[CORE] Adjusting minimap zoom to "+str(minimap_zoom)+"\n")
+    textArea.setCaretPosition(textArea.getDocument().getLength())
     click(Location(1240,128))
     click(Location(1240,128))
     click(Location(1240,128))
-
-    print "adjusting minimap to zoom:",minimap_zoom
-    messageCENTER.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Adjusting minimap to zoom: "+str(minimap_zoom))
 
     if minimap_zoom == 1:
         click(Location(1240,110))
-
     if minimap_zoom == 2:
         click(Location(1240,110))
         click(Location(1240,110))
-
-
-###############################################
-######## ########     ###    ##     ## ######## 
-##       ##     ##   ## ##   ###   ### ##       
-##       ##     ##  ##   ##  #### #### ##       
-######   ########  ##     ## ## ### ## ######   
-##       ##   ##   ######### ##     ## ##       
-##       ##    ##  ##     ## ##     ## ##       
-##       ##     ## ##     ## ##     ## ######## 
-###############################################
-
-#frame structure
-frame = JFrame("Console Log")
-frame.setLocation(360,630)
-frame.setSize(550,140)
-frame.visible = True
-frame.setAlwaysOnTop(True)
-#Sets initial text
-messageTOP = JLabel("Current Waypoint: "+label+" "+str(wp))
-frame.add(messageTOP,NORTH)
-messageBOTTOM = JLabel("")
-frame.add(messageBOTTOM,SOUTH)
-messageCENTER = JLabel("")
-frame.add(messageCENTER,CENTER)
-messageCENTER.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"[INITIALIZING BOT]")
 
 
 ############################################################
@@ -446,20 +452,52 @@ htk_shovel      = "p"
 htk_ring        = "l"
 htk_ammo        = "r"
 htk_haste       = "4"
+             
+###############################################
+######## ########     ###    ##     ## ######## 
+##       ##     ##   ## ##   ###   ### ##       
+##       ##     ##  ##   ##  #### #### ##       
+######   ########  ##     ## ## ### ## ######   
+##       ##   ##   ######### ##     ## ##       
+##       ##    ##  ##     ## ##     ## ##       
+##       ##     ## ##     ## ##     ## ######## 
+###############################################
+
+frame = JFrame("Console Log")
+frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE)
+frame.setBounds(360,630,550,140);
+contentPane = JPanel()
+frame.setContentPane(contentPane)
+textArea = JTextArea(6,44)
+textArea.setEditable(False)
+contentPane.add(textArea)
+scrollPane = JScrollPane(textArea, JScrollPane.VERTICAL_SCROLLBAR_ALWAYS, JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED)
+contentPane.add(scrollPane)
+frame.setAlwaysOnTop(True)
+frame.setVisible(True)
+
+textArea.append("[STARTING EXECUTION]"+"\n")
+textArea.setCaretPosition(textArea.getDocument().getLength())
+
+###############################################
+#calls script selector
+script_selector_function()
 
 #in case ping latency is too high, increase the waiting time
 #Use only integer values
 global walk_lag_delay 
-walk_lag_delay = 2
+walk_lag_delay = 1
 
 #starting waypoint configuration
 wp = 1
-label = "hunt"
+#label = "go_hunt"
+label = select("Please select a starting point","Available Starting Points", options = ("go_hunt","hunt","leave"), default = "go_hunt")
+textArea.append("[CORE] Starting at "+label+", waypoint "+str(wp)+"\n")
+textArea.setCaretPosition(textArea.getDocument().getLength())
 
-#calls script selector
-script_selector_function()
+#set focus on game client
 App.focus("Tibia")
-
+                
 #shows ping on game screen
 type(Key.F8, KeyModifier.ALT)
 
@@ -494,42 +532,42 @@ while True:
         #verifies if should perform some action when reaches destination
         if wp_action > 0:
             waypoint_action(wp_action)
-        print "Arrived at",label,"waypoint",wp
-        messageCENTER.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Arrived at "+label+" waypoint "+str(wp))
+            
+        #After arriving at destination waypoint
+        textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Arrived at "+label+" waypoint "+str(wp)+"\n")
+        textArea.setCaretPosition(textArea.getDocument().getLength())
         
         #########################################
         #current waypoint is the last one for hunt
         if (label == "hunt" and wp >= last_hunt_wp):
             
             #check if it should leave the hunt
-            print "Checking for exit conditions..."
-            messageCENTER.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Checking for exit conditions...")
+            textArea.append("[CORE] Checking for exit conditions...\n")
+            textArea.setCaretPosition(textArea.getDocument().getLength())
             label = imported_script.check_exit()
             wp = 1
-            messageTOP.setText("Current Waypoint: "+label+" "+str(wp))
             
         ##########################################
         #current waypoint is the last one for leave
         elif label == "leave" and wp >= last_leave_wp:
+            logoff_function()
             
-            #check if there is battle-on icon
-            statusBar = Region(1111,335,110,14)
-            if statusBar.exists("battleon.png"):
-                waitVanish("battleon.png",30)
-                logoff_function()
-            else: logoff_function()
-        
+        ##########################################
+        #current waypoint is the last one for go_hunt
+        elif label == "go_hunt" and wp >= last_go_hunt_wp:
+            textArea.append("[CORE] Setting label to Hunt\n")
+            textArea.setCaretPosition(textArea.getDocument().getLength())
+            label = "hunt"
+            wp = 1
+            
         ##########################################
         #no criterea matched
         else: 
             wp+=1
-            messageTOP.setText("Current Waypoint: "+label+" "+str(wp))
-    
     except:
-        print "[ATTENTION] Waypoint",wp,"not found for",label
-        messageCENTER.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"[ATTENTION] Waypoint "+str(wp)+" not found for "+label)
+        textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"[ERROR] Waypoint "+str(wp)+" not found for "+label+"\n")
+        textArea.setCaretPosition(textArea.getDocument().getLength())
         wp+=1
-        messageTOP.setText("Current Waypoint: "+label+" "+str(wp))
         pass
 
 #end
