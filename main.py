@@ -7,8 +7,9 @@ import re
 import math
 import importlib
 import json
+from threading import Thread
 from datetime import *
-from javax.swing import JFrame, JButton, JLabel, JScrollPane, JTextArea, JPanel
+from javax.swing import JFrame, JButton, JLabel, JScrollPane, JTextArea, JPanel, JButton
 from java.awt.BorderLayout import *
 from sikuli import *
 
@@ -16,6 +17,44 @@ from sikuli import *
 Settings.ObserveScanRate = 10
 Settings.MoveMouseDelay = 0
 Settings.ActionLogs = 0
+
+############################
+##        #######   ######   
+##       ##     ## ##    ##  
+##       ##     ## ##        
+##       ##     ## ##   #### 
+##       ##     ## ##    ##  
+##       ##     ## ##    ##  
+########  #######   ######   
+############################
+
+#receives a message and print it on jframe
+def log(message):
+    messageLOG.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+str(message)+"\n")
+        
+#############################################################################################
+########  #### ##     ## ######## ##           ######   #######  ##        #######  ########  
+##     ##  ##   ##   ##  ##       ##          ##    ## ##     ## ##       ##     ## ##     ## 
+##     ##  ##    ## ##   ##       ##          ##       ##     ## ##       ##     ## ##     ## 
+########   ##     ###    ######   ##          ##       ##     ## ##       ##     ## ########  
+##         ##    ## ##   ##       ##          ##       ##     ## ##       ##     ## ##   ##   
+##         ##   ##   ##  ##       ##          ##    ## ##     ## ##       ##     ## ##    ##  
+##        #### ##     ## ######## ########     ######   #######  ########  #######  ##     ##
+#############################################################################################
+
+#applescript function that returns the color of 1 exact pixel on the screen
+def get_pixel_color(posX,posY):   
+    command = "screencapture -R"+str(posX)+","+str(posY)+",1,1 -t bmp $TMPDIR/test.bmp && xxd -p -l 3 -s 54 $TMPDIR/test.bmp | sed 's/\\(..\\)\\(..\\)\\(..\\)/\\3\\2\\1/'"
+    color = re.sub(r"\s+", "", os.popen(command).read(), flags=re.UNICODE)
+
+    #log("Pixel analyzed at "+str(posX)+","+str(posY)+": "+color)
+
+    return color
+
+def get_health_pixel_color(posX,posY):   
+    command = "screencapture -R"+str(posX)+","+str(posY)+",1,1 -t bmp $TMPDIR/test.bmp && xxd -p -l 3 -s 54 $TMPDIR/test.bmp | sed 's/\\(..\\)\\(..\\)\\(..\\)/\\3\\2\\1/'"
+    color = re.sub(r"\s+", "", os.popen(command).read(), flags=re.UNICODE)
+    return color
 
 ###########################################################
 ##        #######   ######       #######  ######## ######## 
@@ -32,42 +71,24 @@ def logoff_function():
     statusBar = Region(1111,335,110,14)
     
     if statusBar.exists("battleon.png"):
-        textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Battle icon on - Waiting 30 secs"+"\n")
-        textArea.setCaretPosition(textArea.getDocument().getLength())
+        log("Battle icon on - Waiting 30 secs")
         wait(30)
-        textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Trying to logoff again..."+"\n")
-        textArea.setCaretPosition(textArea.getDocument().getLength())
+        log("Trying to logoff again...")
         logoff_function()
         
     else:
-        textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Printing Screen"+"\n")
-        textArea.setCaretPosition(textArea.getDocument().getLength())
+        log("Printing Screen")
         type("3", KeyModifier.CMD + KeyModifier.SHIFT)
         type("l", KeyModifier.CMD)
-        textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"[END OF EXECUTION]"+"\n")
-        textArea.setCaretPosition(textArea.getDocument().getLength())
-    
+        log("[END OF EXECUTION]")
         type("c", KeyModifier.CMD + KeyModifier.SHIFT)
 
-#############################################################################################
-########  #### ##     ## ######## ##           ######   #######  ##        #######  ########  
-##     ##  ##   ##   ##  ##       ##          ##    ## ##     ## ##       ##     ## ##     ## 
-##     ##  ##    ## ##   ##       ##          ##       ##     ## ##       ##     ## ##     ## 
-########   ##     ###    ######   ##          ##       ##     ## ##       ##     ## ########  
-##         ##    ## ##   ##       ##          ##       ##     ## ##       ##     ## ##   ##   
-##         ##   ##   ##  ##       ##          ##    ## ##     ## ##       ##     ## ##    ##  
-##        #### ##     ## ######## ########     ######   #######  ########  #######  ##     ##
-#############################################################################################
-
-#applescript function that returns the color of 1 exact pixel on the screen
-def get_pixel_color(posX,posY):   
-    command = "screencapture -R"+str(posX)+","+str(posY)+",1,1 -t bmp $TMPDIR/test.bmp && xxd -p -l 3 -s 54 $TMPDIR/test.bmp | sed 's/\\(..\\)\\(..\\)\\(..\\)/\\3\\2\\1/'"
-    color = re.sub(r"\s+", "", os.popen(command).read(), flags=re.UNICODE)
-
-    #textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Pixel Analyzed: "+color+"\n")
-    #textArea.setCaretPosition(textArea.getDocument().getLength())
-    
-    return color
+#Exit condition: Leave hunt in case stamina in no longer green
+def exit_on_low_stamina():
+    returned_color = get_pixel_color(14,332)
+    if returned_color != "00ff00":
+        label = "leave"
+    else: label = "hunt"
 
 ###########################################################################################
 ##      ##    ###    ##    ## ########   #######  #### ##    ## ######## ######## ########  
@@ -81,10 +102,7 @@ def get_pixel_color(posX,posY):
 
 #function to walk to next waypoint
 def waypointer(label,wp):
-
-    textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Walking to "+label+" waypoint "+str(wp)+"\n")
-    textArea.setCaretPosition(textArea.getDocument().getLength())
-    
+    log("Walking to "+label+" waypoint "+str(wp)) 
     if label == "go_hunt":
         wp_action = imported_script.label_go_hunt(wp)
     
@@ -93,6 +111,8 @@ def waypointer(label,wp):
         
     if label == "leave":
         wp_action = imported_script.label_leave(wp)
+
+    hover(Location(screen_center_x,screen_center_y))
 
     #checks if the Char has stopped or continues walking
     walking_check(0,wp_action,label,wp)
@@ -113,19 +133,12 @@ def walking_check(time_stopped,wp_action,label,wp):
             time_stopped = 0
             
             #verifies if it should engage combat while walking
-            if label == "hunt" and lure_mode == 0:
-
-                returned_color = get_pixel_color(960,77)
-                if returned_color != "3f3f3f": #means there is a mob on battle list
-                    textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Mob detected while walking"+"\n")
-                    textArea.setCaretPosition(textArea.getDocument().getLength())
-
-                    #press ESC to stop movement
+            if label == "hunt" and lure_mode == 0: 
+                battleList = get_pixel_color(941,70)
+                if battleList != "414141":
                     type(Key.ESC)
                     wait(0.5)
-                    #calls attack function
                     attack_function()
-                    #after killing mob, calls back waypointer function
                     waypointer(label,wp)
                 else: pass
                 
@@ -168,25 +181,72 @@ def waypoint_action(wp_action):
     if wp_action == 1:
         type(htk_rope)
         click(Location(screen_center_x,screen_center_y))
-        textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Action 1 - Using rope"+"\n")
-        textArea.setCaretPosition(textArea.getDocument().getLength())
-
+        log("Using rope")
         
     if wp_action == 2:
         click(Location(screen_center_x,screen_center_y))
-        textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Action 2 - Using ladder"+"\n")
-        textArea.setCaretPosition(textArea.getDocument().getLength())
-
+        log("Using ladder")
         
     if wp_action == 3:
         type(htk_shovel)
         click(Location(screen_center_x,screen_center_y))
-        textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Action 3 - Using shovel"+"\n")
-        textArea.setCaretPosition(textArea.getDocument().getLength())
-
-        
+        log("Using shovel")    
+    
     wait(1)
     return
+
+########################################################    
+##     ## ########    ###    ##       ######## ########  
+##     ## ##         ## ##   ##       ##       ##     ## 
+##     ## ##        ##   ##  ##       ##       ##     ## 
+######### ######   ##     ## ##       ######   ########  
+##     ## ##       ######### ##       ##       ##   ##   
+##     ## ##       ##     ## ##       ##       ##    ##  
+##     ## ######## ##     ## ######## ######## ##     ##
+########################################################
+
+gwr = Region(396,104,488,356)
+
+class healerClass(Thread):
+    def __init__(self,tname):
+        Thread.__init__(self)
+        self.t = tname
+
+    def run(self):
+        while stop_threads == 0:
+            if heal_flag == 1:
+                #Life < 50%
+                returned_color = get_health_pixel_color(1172,166)
+                if returned_color != "922d2b": 
+                    type(htk_life_pot)
+                    log("[HEALER] Using life potion")
+            
+                #Life < 85%
+                returned_color = get_health_pixel_color(1192,166)
+                if returned_color != "922d2b": 
+                    type(htk_life_spell)
+                    log("[HEALER] Casting life spell")
+                
+                #Mana < 50%
+                returned_color = get_health_pixel_color(1172,179)  
+                if returned_color != '2e2893': 
+                    type(htk_mana_pot)
+                    log("[HEALER] Using mana potion")   
+                
+                wait(1)
+        else: print "Ending healer thread"
+        
+def startHealerThread():
+    if thread1.isAlive() == False: 
+        print "Starting healer thread"
+        thread1.start()
+    else: 
+        print "Healer thread already running"
+
+thread1 = healerClass("healerThread")
+stop_threads = 0
+heal_flag = 0
+startHealerThread()
 
 ##########################################################################
    ###    ######## ########    ###     ######  ##    ## ######## ########  
@@ -197,53 +257,24 @@ def waypoint_action(wp_action):
 ##     ##    ##       ##    ##     ## ##    ## ##   ##  ##       ##    ##  
 ##     ##    ##       ##    ##     ##  ######  ##    ## ######## ##     ## 
 ##########################################################################
+blr = Region(929,60,34,187)
 
 def attack_function():
-
-    returned_color = get_pixel_color(960,77)
-    if returned_color == "3f3f3f": 
-        textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Battle list is clear"+"\n")
-        textArea.setCaretPosition(textArea.getDocument().getLength())
-        return
-    
-    else:
-        textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Monster detected on screen"+"\n")
-        textArea.setCaretPosition(textArea.getDocument().getLength())
-        type(Key.SPACE)        
-        attacking(0,1)
-        #wait untill mob is dead to get loot
-        if take_loot == 1: melee_looter()
-        #call function again to check if there is another mob on the battle list
-        attack_function()
-
-
-#function to verify if its currently attacking a mob
-def attacking(slot,atkCount):
-
-    #textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Attacking slot "+str(slot)+" - "+str(atkCount)+"/30 \n")
-    #textArea.setCaretPosition(textArea.getDocument().getLength())
-
-    #verifies health and mana
-    healer_function()
-
-    if atkCount >= 30:
-        textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Trap or unreachable - Switching Target \n")
-        textArea.setCaretPosition(textArea.getDocument().getLength())
-        type(Key.SPACE)
-        slot+=1
-        atkCount=0
-
-    #distance between slots is 22 pixels
-    returned_color = get_pixel_color(932,60+(slot*22))
-      
-    if (returned_color == 'ff0000' or returned_color == 'ff7f7d'): #red or whitish-red
-        attacking(slot,atkCount+1)
-
-    if returned_color == 'ffffff':
-        type(Key.SPACE)
-        attacking(0,1)
-
+    log("Mob detected on screen")
+    type(Key.SPACE) 
+    attacking()
+    #checks for new mob on screen
+    battleList = get_pixel_color(941,70)
+    if battleList != "414141": attack_function()
     else: return
+    
+def attacking(): 
+    log("[TARGETING] Attacking mob...")
+    global heal_flag
+    heal_flag = 1
+    blr.waitVanish("atk_small.png",30) #waits for 30 seconds before switching mob
+    heal_flag = 0 
+    if take_loot == 1: melee_looter();melee_looter()
 
 #################################################################
 ##        #######   #######  ######## ######## ######## ########  
@@ -255,50 +286,23 @@ def attacking(slot,atkCount):
 ########  #######   #######     ##       ##    ######## ##     ## 
 #################################################################
 
-#MELEE
+def ranged_looter():
+    log("Looting at mouse pos")
+    click(atMouse(),8)
+    wait(3)
+
 def melee_looter():
-    textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Looting around char"+"\n")
-    textArea.setCaretPosition(textArea.getDocument().getLength())
-
-    #1 2 3
-    #8 9 4
-    #7 6 5
-    click(Location(600,275),8) #1
-    click(Location(640,275),8) #2
-    click(Location(675,275),8) #3
-    click(Location(675,310),8) #4
-    click(Location(675,345),8) #5
-    click(Location(640,345),8) #6
-    click(Location(600,345),8) #7
-    click(Location(600,310),8) #8
-    click(Location(645,310),8) #9
+    log("Looting around char")
+    click(Location(605,250),8) #1
+    click(Location(640,250),8) #2
+    click(Location(670,250),8) #3
+    click(Location(606,280),8) #8
+    click(Location(640,280),8) #9
+    click(Location(670,280),8) #4
+    click(Location(605,312),8) #7
+    click(Location(640,312),8) #6
+    click(Location(670,312),8) #5
     
-########################################################    
-##     ## ########    ###    ##       ######## ########  
-##     ## ##         ## ##   ##       ##       ##     ## 
-##     ## ##        ##   ##  ##       ##       ##     ## 
-######### ######   ##     ## ##       ######   ########  
-##     ## ##       ######### ##       ##       ##   ##   
-##     ## ##       ##     ## ##       ##       ##    ##  
-##     ## ######## ##     ## ######## ######## ##     ##
-########################################################
-
-def healer_function():
-
-    #Life < 50%
-    returned_color = get_pixel_color(1172,166)
-    if returned_color != "922d2b": type(htk_life_pot)
-
-    #Life < 85%
-    returned_color = get_pixel_color(1192,166)
-    if returned_color != "922d2b": type(htk_life_spell)
-    
-    #Mana < 50%
-    returned_color = get_pixel_color(1172,179)  
-    if returned_color != '2e2893': type(htk_mana_pot)
-
-    return
-        
 ###########################################################################
 ########  ######## ########  ##     ## ######## ######## ######## ########  
 ##     ## ##       ##     ## ##     ## ##       ##       ##       ##     ## 
@@ -343,15 +347,13 @@ def script_selector_function():
             "-nothing selected-",
             "[RK] Rook PSC",
             "[RK] Rook Mino Hell",
-            "[RK] Rook Troll PA",
             "[EK] Amazon Camp"
     )
     prompt = select("Please select a script from the list","Available Scripts", options = script_list, default = script_list[0])
 
     if prompt == script_list[0]:
         popup("You did not choose a script - Terminating!")
-        textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"[WARNING] No Script Selected \n [END OF EXECUTION]")
-        textArea.setCaretPosition(textArea.getDocument().getLength())
+        log("[WARNING] No Script Selected \n[END OF EXECUTION]")
         type('c', KeyModifier.CMD + KeyModifier.SHIFT)
         
     if prompt == script_list[1]:
@@ -363,11 +365,6 @@ def script_selector_function():
         script_loader(selected_script)
 
     if prompt == script_list[3]:
-        selected_script = "rook_troll"
-        script_loader(selected_script)
-
-
-    if prompt == script_list[4]:
         selected_script = "amazon_camp"
         script_loader(selected_script)
 
@@ -376,26 +373,24 @@ def script_loader(selected_script):
 
     global imported_script
     global take_loot
+    global combat_mode
     global lure_mode
     global equip_ring
-    global refill_ammo
     global minimap_zoom
     global last_hunt_wp
     global last_leave_wp
     global last_go_hunt_wp
     
-    textArea.append("[CORE] Selected Script: "+selected_script+"\n")
-    textArea.setCaretPosition(textArea.getDocument().getLength())
+    log("[CORE] Selected Script: "+selected_script)
 
     #imports the script that will be executed on this session
     imported_script = importlib.import_module(selected_script)
            
     #reads the value from the import script
-    combat_mode     = imported_script.combat_mode
     take_loot       = imported_script.take_loot
+    combat_mode     = imported_script.combat_mode
     lure_mode       = imported_script.lure_mode
     equip_ring      = imported_script.equip_ring
-    refill_ammo     = imported_script.refill_ammo
     minimap_zoom    = imported_script.minimap_zoom
     last_hunt_wp    = imported_script.last_hunt_wp
     last_leave_wp   = imported_script.last_leave_wp
@@ -412,18 +407,13 @@ def script_loader(selected_script):
 ##########################################################
 
 def minimap_adjustment():
-    textArea.append("[CORE] Adjusting minimap zoom to "+str(minimap_zoom)+"\n")
-    textArea.setCaretPosition(textArea.getDocument().getLength())
+    log("[CORE] Adjusting minimap zoom to "+str(minimap_zoom))
     click(Location(1240,128))
     click(Location(1240,128))
     click(Location(1240,128))
 
-    if minimap_zoom == 1:
+    for i in range(0,minimap_zoom):
         click(Location(1240,110))
-    if minimap_zoom == 2:
-        click(Location(1240,110))
-        click(Location(1240,110))
-
 
 ############################################################
  ######   #######  ##    ## ######## ####  ######    ######  
@@ -438,8 +428,8 @@ def minimap_adjustment():
 #center of screen
 global screen_center_x
 global screen_center_y
-screen_center_x = 645
-screen_center_y = 310
+screen_center_x = 640
+screen_center_y = 280
 
 #hotkey presets
 htk_life_pot    = Key.F1
@@ -463,21 +453,22 @@ htk_haste       = "4"
 ##       ##     ## ##     ## ##     ## ######## 
 ###############################################
 
-frame = JFrame("Console Log")
+def closeFrame(event):
+    global stop_threads
+    stop_threads = 1
+    frame.dispose()
+
+frame = JFrame("")
 frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE)
-frame.setBounds(360,630,550,140);
-contentPane = JPanel()
-frame.setContentPane(contentPane)
-textArea = JTextArea(6,44)
-textArea.setEditable(False)
-contentPane.add(textArea)
-scrollPane = JScrollPane(textArea, JScrollPane.VERTICAL_SCROLLBAR_ALWAYS, JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED)
-contentPane.add(scrollPane)
+frame.setBounds(358,21,560,25)
+messageLOG = JLabel("Initializing Bot - Loading configurations...")
+frame.add(messageLOG,CENTER)
+button = JButton("HIDE", actionPerformed =closeFrame)
+frame.add(button,WEST)
+frame.setUndecorated(True)
 frame.setAlwaysOnTop(True)
 frame.setVisible(True)
-
-textArea.append("[STARTING EXECUTION]"+"\n")
-textArea.setCaretPosition(textArea.getDocument().getLength())
+log("[STARTING EXECUTION]")
 
 ###############################################
 #calls script selector
@@ -488,12 +479,25 @@ script_selector_function()
 global walk_lag_delay 
 walk_lag_delay = 1
 
-#starting waypoint configuration
-wp = 1
-#label = "go_hunt"
+#starting label
 label = select("Please select a starting point","Available Starting Points", options = ("go_hunt","hunt","leave"), default = "go_hunt")
-textArea.append("[CORE] Starting at "+label+", waypoint "+str(wp)+"\n")
-textArea.setCaretPosition(textArea.getDocument().getLength())
+
+#starting waypoint number
+if label == "go_hunt":
+    myList = list(range(1,last_go_hunt_wp+1))
+    
+if label == "hunt":
+    myList = list(range(1,last_hunt_wp+1))
+
+if label == "leave":
+    myList = list(range(1,last_leave_wp+1))
+
+list_string = map(str, myList)
+wp_str = select("Choose a starting waypoint",label, list_string, default = 0)
+wp = int(wp_str)
+
+#displays on Frame
+log("[CORE] Starting at "+label+" waypoint "+str(wp))
 
 #set focus on game client
 App.focus("Tibia")
@@ -502,7 +506,7 @@ App.focus("Tibia")
 type(Key.F8, KeyModifier.ALT)
 
 #mute system
-subprocess.Popen(['osascript', '-e', 'set Volume 0'])
+#subprocess.Popen(['osascript', '-e', 'set Volume 0'])
 
 #adjusts the minimap zoom
 minimap_adjustment()
@@ -521,11 +525,13 @@ minimap_adjustment()
 while True:
 
     #makes console frame appear (BUG: it may vanish after a while)
-    frame.visible = True
+    #frame.visible = True
     
-    #hover(Location(screen_center_x,screen_center_y))
-    if label == "hunt": attack_function()
-    #statusBar_check()
+    hover(Location(screen_center_x,screen_center_y))
+    if label == "hunt": 
+        battleList = get_pixel_color(941,70)
+        if battleList != "414141": attack_function()
+        #statusBar_check()
     
     try: 
         wp_action = waypointer(label,wp)
@@ -534,16 +540,14 @@ while True:
             waypoint_action(wp_action)
             
         #After arriving at destination waypoint
-        textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"Arrived at "+label+" waypoint "+str(wp)+"\n")
-        textArea.setCaretPosition(textArea.getDocument().getLength())
+        log("Arrived at "+label+" waypoint "+str(wp))
         
         #########################################
         #current waypoint is the last one for hunt
         if (label == "hunt" and wp >= last_hunt_wp):
             
             #check if it should leave the hunt
-            textArea.append("[CORE] Checking for exit conditions...\n")
-            textArea.setCaretPosition(textArea.getDocument().getLength())
+            log("[CORE] Checking for exit conditions...")
             label = imported_script.check_exit()
             wp = 1
             
@@ -555,8 +559,7 @@ while True:
         ##########################################
         #current waypoint is the last one for go_hunt
         elif label == "go_hunt" and wp >= last_go_hunt_wp:
-            textArea.append("[CORE] Setting label to Hunt\n")
-            textArea.setCaretPosition(textArea.getDocument().getLength())
+            log("[CORE] Setting label to Hunt")
             label = "hunt"
             wp = 1
             
@@ -565,8 +568,7 @@ while True:
         else: 
             wp+=1
     except:
-        textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+"[ERROR] Waypoint "+str(wp)+" not found for "+label+"\n")
-        textArea.setCaretPosition(textArea.getDocument().getLength())
+        log("[ERROR] Waypoint "+str(wp)+" not found for "+label)
         wp+=1
         pass
 
