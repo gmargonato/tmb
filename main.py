@@ -11,6 +11,7 @@ import threading
 from datetime import *
 from javax.swing import JFrame, JButton, JLabel, JScrollPane, JTextArea, JPanel, JButton
 from java.awt.BorderLayout import *
+from java.awt import Robot, Color
 from sikuli import *
 
 #basic sikuli configurations
@@ -39,14 +40,24 @@ screen_center_x = 640
 screen_center_y = 280
 
 #hotkey presets
-htk_life_pot     = Key.F1
-htk_mana_pot     = "3"
-htk_life_spell   = "1"
-htk_poison_spell = Key.F10
-htk_food         = Key.F12
-htk_rope         = "o"
-htk_shovel       = "p"
-htk_ring         = "l"
+#life
+htk_greenHealth    = "1"
+htk_yellowHealth   = Key.F1
+htk_redHealth      = Key.F3
+
+#mana
+htk_mana_pot       = "3"
+
+#tools
+htk_food           = Key.F12
+htk_rope           = "o"
+htk_shovel         = "p"
+htk_ring           = "l"
+
+#other
+htk_poison_spell   = Key.F10
+htk_atk_spell      = "2"
+htk_atk_area_spell = "f"
 
 #############################################################
 ########  ########  ######   ####  #######  ##    ##  ######  
@@ -61,8 +72,9 @@ htk_ring         = "l"
 #watchable regions
 statusbar_region   = Region(1111,335,110,14)
 battlelist_region  = Region(929,60,34,187)
-warning_region     = Region(583,440,109,16)
-health_mana_region = Region(1111,162,112,28)
+warning_region     = Region(658,440,34,14)
+game_region        = Region(401,105,478,350)
+last_loot_line_region = Region(360,732,546,41)
 
 ##########################################################################
 ########  ########  #### ##    ## ########    ##        #######   ######   
@@ -76,8 +88,9 @@ health_mana_region = Region(1111,162,112,28)
 
 #receives a message and print it onto jframe
 def log(message):
-    messageLOG.setText(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+str(message)+"\n")
-        
+    textArea.append(str(datetime.now().strftime("%d/%m/%Y %H:%M:%S - "))+str(message)+"\n")
+    textArea.setCaretPosition(textArea.getDocument().getLength())
+
 #############################################################################################
 ########  #### ##     ## ######## ##           ######   #######  ##        #######  ########  
 ##     ##  ##   ##   ##  ##       ##          ##    ## ##     ## ##       ##     ## ##     ## 
@@ -90,8 +103,21 @@ def log(message):
 
 #applescript function that returns the color of 1 exact pixel on the screen
 def get_pixel_color(posX,posY):   
-    command = "screencapture -R"+str(posX)+","+str(posY)+",1,1 -t bmp $TMPDIR/test.bmp && xxd -p -l 3 -s 54 $TMPDIR/test.bmp | sed 's/\\(..\\)\\(..\\)\\(..\\)/\\3\\2\\1/'"
-    color = re.sub(r"\s+", "", os.popen(command).read(), flags=re.UNICODE)
+    pixel = Robot().getPixelColor(posX,posY)
+    r = pixel.getRed()
+    g = pixel.getGreen() 
+    b = pixel.getBlue() 
+    color = '{:02x}{:02x}{:02x}'.format(r,g,b)
+    return color
+
+#to be used exclusively by the healer thread
+def get_mana_health_color(posX,posY):
+    pixel = Robot().getPixelColor(posX,posY)
+    r = pixel.getRed()
+    g = pixel.getGreen() 
+    b = pixel.getBlue() 
+    color = '{:02x}{:02x}{:02x}'.format(r,g,b)
+    #DEBUG: print "getManaHealthColor:",posX,posY,color
     return color
 
 ###########################################################
@@ -149,6 +175,7 @@ def waypointer(label,wp):
     if label == "leave":
         wp_action = imported_script.label_leave(wp)
 
+    #moves mouse back to center of screen 
     hover(Location(screen_center_x,screen_center_y))
 
     #checks if the Char has stopped or continues walking
@@ -171,7 +198,7 @@ def walking_check(time_stopped,wp_action,label,wp):
             #verifies if it should engage combat while walking
             if label == "hunt" and lure_mode == 0: 
                 battleList = get_pixel_color(941,70)
-                if battleList != "414141":
+                if battleList != "323232":
                     type(Key.ESC)
                     wait(0.5)
                     attack_function()
@@ -227,26 +254,18 @@ def waypoint_action(wp_action):
 
     if wp_action == 11:
         click(Location(639, 249))
-        wait(0.5)
-        type(Key.UP)
         log("Using door on top")
 
     if wp_action == 12:
         click(Location(674, 280))
-        wait(0.5)
-        type(Key.RIGHT)
         log("Using door on right")
 
     if wp_action == 13:
         click(Location(639, 312))
-        wait(0.5)
-        type(Key.DOWN)
         log("Using door on south")
 
     if wp_action == 14:
         click(Location(607, 282))
-        wait(0.5)
-        type(Key.LEFT)
         log("Using door on left")
     
     wait(1)
@@ -262,20 +281,65 @@ def waypoint_action(wp_action):
 ##     ## ######## ##     ## ######## ######## ##     ##
 ########################################################
 
+ok_health     = ('08a000','09a100','09a600','089f00')
+green_health  = ('4f8000','528400','508000','4f7f00')
+yellow_health = ('a47700','aa7c00','a47800','a37700')
+red_health    = ('9a181d','9f191e','9a191d','99191d')
+not_ok_mana   = ('1c1c1c','1f1f1e','1e1e1d','20201f','1f1f1d','1e1e1e')
+
 def healer_function(arg):
     while stop_threads == 0:
-        if vocation != 0:
-            if (health_mana_region.exists(Pattern("1603453041813.png").similar(0.80)) or health_mana_region.exists("1603582235400.png")): 
-                type(htk_mana_pot)
-            if health_mana_region.exists("1603421847274.png"):
-                type(htk_life_spell)
-        if (health_mana_region.exists(Pattern("1603421926820.png").similar(0.80))): 
-            type(htk_life_pot)
-        wait(1)
-    else: print "Ending healer thread"
         
+        #defines exhaust for objects (pot) and spells
+        exhaustedPot   = 0
+        exhaustedSpell = 0
+        
+        #check health and mana pixel colors
+        health_color = get_mana_health_color(365,60)
+        mana_color = get_mana_health_color(735,60)
+
+        #if the script is runnnig for non-vocation, checks just health and continue
+        if vocation == 0:
+            if health_color in yellow_health: 
+                log("[TARGETING] Using health potion...")
+                type(htk_yellowHealth) #special case: uses potion on yellow health
+            wait(1)
+            continue
+        
+        #if script is running for any other vocation
+        else:
+            #print "Cor da mana", mana_color
+            if mana_color in not_ok_mana: 
+                log("[HEALER] Using mana potion")
+                type(htk_mana_pot)
+                exhaustedPot = 1
+
+            #print "Cor da vida", health_color
+            if health_color in red_health:
+                log("[HEALER] Using health potion")
+                if exhaustedPot == 1: wait(1)
+                type(htk_redHealth)
+                exhaustedPot = 1
+                
+            if health_color in yellow_health:
+                log("[HEALER] Casting intense heal spell")
+                type(htk_yellowHealth)
+                exhaustedSpell = 1
+            
+            if health_color in green_health:  
+                log("[HEALER] Casting light heal spell")
+                if exhaustedSpell == 1: wait(1)
+                type(htk_greenHealth)
+                exhaustedSpell = 1
+
+            if exhaustedPot == 1 or exhaustedSpell == 1: wait(1)
+            continue
+    
+    #terminating Thread        
+    else: print "Ending healer thread"
+   
 def startHealerThread():
-    healer_thread = Thread(target=healer_function, args = (0,))
+    healer_thread = threading.Thread(target=healer_function, args = (0,))
     if healer_thread.isAlive() == False:
         print "Starting healer thread"
         healer_thread.start()
@@ -301,11 +365,12 @@ def attack_function():
         if warning_region.exists(Pattern("thereisnoway.png").similar(0.90)):
             type(Key.ESC)
             log("[TARGETING] There is no way")
+            wait(5)
             return
     attacking()
     #checks for new mob on screen
     battleList = get_pixel_color(941,70)
-    if battleList != "414141": attack_function()
+    if battleList != "323232": attack_function()
     else:
         log("Battle list clear")
         return
@@ -313,8 +378,32 @@ def attack_function():
 def attacking(): 
     log("[TARGETING] Attacking mob...")
     battlelist_region.waitVanish("atk_small.png",30) #waits for 30 seconds before switching mob
-    if take_loot == 1: wait(0.2);melee_looter()
+    if take_loot == 0: return
+    elif take_loot == 1 and loot_only_valuable == 0:
+        melee_looter()
+    elif take_loot == 1 and loot_only_valuable == 1:
+        if last_loot_line_region.exists("valuable_loot.png",0):
+            melee_looter();melee_looter()
+        else: return
+    else: return
 
+#attack spell caster
+def spell_caster_function(arg):
+    while stop_threads == 0:
+        while battlelist_region.exists("atk_small.png"):
+            type(htk_atk_spell)
+            wait(2)
+            #if lure_mode == 1: type(htk_atk_area_spell);wait(2)
+    else: print "Ending spell caster thread"
+
+def startSpellCasterThread():
+    spell_cast_thread = threading.Thread(target=spell_caster_function, args = (0,))
+    if spell_cast_thread.isAlive() == False:
+        print "Starting spell caster thread"
+        spell_cast_thread.start()
+    else: 
+        print "Spell caster thread already running"
+  
 #################################################################
 ##        #######   #######  ######## ######## ######## ########  
 ##       ##     ## ##     ##    ##       ##    ##       ##     ## 
@@ -326,7 +415,7 @@ def attacking():
 #################################################################
 
 def ranged_looter():
-    log("Looting at mouse pos")
+    log("Looting at mouse position")
     click(atMouse(),8)
     wait(3)
 
@@ -372,56 +461,45 @@ def status_bar_check():
 def script_selector_function():
     script_list = (
             "-nothing selected-",
-            "[RK] Rook PSC",
-            "[RK] Rook Mino Hell",
-            "[RK] Rook Troll PA",
-            "[RK] Rook Wolf PA",
-            "[EK] Venore Amazon Camp",
-            "[EK] Yalahar Cults"
+            "[Rook] Poison Spider",
+            "[Rook] Mino Hell",
+            "[Rok] Troll PA",
+            "Venore Amazon Camp",
+            "Yalahar Cults",
+            "Ab Wasp Cave",
+            "Forest Fury",
+            "LB Beholders",
+            "Ice Golems"
     )
     prompt = select("Please select a script from the list","Available Scripts", options = script_list, default = script_list[0])
 
-    if prompt == script_list[0]:
-        popup("You did not choose a script - Terminating!")
-        log("[WARNING] No Script Selected \n[END OF EXECUTION]")
+    if prompt == script_list[1]: selected_script = "rook_psc"
+    elif prompt == script_list[2]: selected_script = "mino_hell"
+    elif prompt == script_list[3]: selected_script = "rook_troll"
+    elif prompt == script_list[4]: selected_script = "amazon_camp"
+    elif prompt == script_list[5]: selected_script = "ylh_rb"
+    elif prompt == script_list[6]: selected_script = "ab_wasp"
+    elif prompt == script_list[7]: selected_script = "forest_fury"
+    elif prompt == script_list[8]: selected_script = "lb_beholder"
+    elif prompt == script_list[9]: selected_script = "ice_golem"
+    else:
+        popup("The selected script ins not valid, terminating execution")
+        log("[END OF EXECUTION] No Script was selected!")
+        closeFrame(0)
         type('c', KeyModifier.CMD + KeyModifier.SHIFT)
-        
-    if prompt == script_list[1]:
-        selected_script = "rook_psc"
-        script_loader(selected_script)
 
-    if prompt == script_list[2]:
-        selected_script = "mino_hell"
-        script_loader(selected_script)
-
-    if prompt == script_list[3]:
-        selected_script = "rook_troll"
-        script_loader(selected_script)
-
-    if prompt == script_list[4]:
-        selected_script = "rook_wolf_pa"
-        script_loader(selected_script)
-
-    if prompt == script_list[5]:
-        selected_script = "amazon_camp"
-        script_loader(selected_script)
-
-    if prompt == script_list[6]:
-        selected_script = "ylh_rb"
-        script_loader(selected_script)
-
+    script_loader(selected_script)
 
 #loads basic configuration from selected script
 def script_loader(selected_script):
 
     global imported_script
-    
     global take_loot
+    global loot_only_valuable
     global lure_mode
     global check_noWay
     global equip_ring
     global vocation
-
     global minimap_zoom
     global last_hunt_wp
     global last_leave_wp
@@ -433,11 +511,12 @@ def script_loader(selected_script):
     imported_script = importlib.import_module(selected_script)
     
     #read variables from imported script
-    take_loot       = imported_script.take_loot
-    lure_mode       = imported_script.lure_mode
-    check_noWay     = imported_script.check_noWay
-    equip_ring      = imported_script.equip_ring
-    vocation     = imported_script.vocation
+    take_loot          = imported_script.take_loot
+    loot_only_valuable = imported_script.loot_only_valuable
+    lure_mode          = imported_script.lure_mode
+    check_noWay        = imported_script.check_noWay
+    equip_ring         = imported_script.equip_ring
+    vocation           = imported_script.vocation
 
     minimap_zoom    = imported_script.minimap_zoom
 
@@ -457,10 +536,12 @@ def script_loader(selected_script):
 
 def set_minimap_zoom(minimap_zoom):
     log("[CORE] Adjusting minimap zoom to "+str(minimap_zoom))
+    #reset zoom
     click(Location(1240,128))
     click(Location(1240,128))
     click(Location(1240,128))
-
+    
+    #adjust to selected
     for i in range(0,minimap_zoom):
         click(Location(1240,110))
              
@@ -479,17 +560,23 @@ def closeFrame(event):
     stop_threads = 1
     frame.dispose()
 
-frame = JFrame("")
+frame = JFrame("Console Log")
 frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE)
-frame.setBounds(358,21,560,25)
-messageLOG = JLabel("Initializing Bot - Loading configurations...")
-frame.add(messageLOG,CENTER)
-button = JButton("HIDE", actionPerformed =closeFrame)
-frame.add(button,WEST)
+frame.setBounds(358,562,560,130)
+contentPane = JPanel()
+frame.setContentPane(contentPane)
+buttonQ = JButton("QUIT", actionPerformed = closeFrame)
+buttonQ.setForeground(Color.RED)
+frame.add(buttonQ,NORTH)
+textArea = JTextArea(5,44)
+textArea.setEditable(False)
+contentPane.add(textArea)
+scrollPane = JScrollPane(textArea, JScrollPane.VERTICAL_SCROLLBAR_ALWAYS, JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED)
+contentPane.add(scrollPane)
 frame.setUndecorated(True)
 frame.setAlwaysOnTop(True)
 frame.setVisible(True)
-log("[STARTING EXECUTION]")
+log("[CORE] Initializing bot")
 
 ###############################################
 ############### BOT STARTS HERE ###############
@@ -513,8 +600,6 @@ if label == "leave":
 list_of_wps = map(str, available_wps)
 wp_str = select("Choose a starting waypoint",label, list_of_wps, default = 0)
 wp = int(wp_str)
-
-#displays on Frame
 log("[CORE] Starting at "+label+" waypoint "+str(wp))
 
 #set focus on game client
@@ -523,13 +608,16 @@ App.focus("Tibia")
 #shows ping on game screen
 type(Key.F8, KeyModifier.ALT)
 
-#mute system
-subprocess.Popen(['osascript', '-e', 'set Volume 0'])
-
 #adjusts the minimap zoom
 set_minimap_zoom(minimap_zoom)
 
+#sets session channel
+if take_loot == 1: click("loot_channel.png")
+else: click("log_channel.png")
+
+#start thereads
 startHealerThread()
+if vocation != 0: startSpellCasterThread()
 
 ##################################################################
  ######     ###    ##     ## ######## ########   #######  ######## 
@@ -547,10 +635,9 @@ while True:
     #makes console frame appear ([BUG] it may vanish after a while)
     #frame.visible = True
     
-    hover(Location(screen_center_x,screen_center_y))
     if label == "hunt": 
         battleList = get_pixel_color(941,70)
-        if battleList != "414141": attack_function()
+        if battleList != "323232": attack_function()
         #statusBar_check()
     
     try: 
@@ -565,12 +652,12 @@ while True:
         #########################################
         #current waypoint is the last one for hunt
         if (label == "hunt" and wp >= last_hunt_wp):
-            
             #check if it should leave the hunt
             log("[CORE] Checking for exit conditions...")
             label = imported_script.check_exit()
+            App.focus("Tibia")
             wp = 1
-            
+    
         ##########################################
         #current waypoint is the last one for leave
         elif label == "leave" and wp >= last_leave_wp:
