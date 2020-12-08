@@ -1,4 +1,4 @@
-#TMB - Tibia Mac Bot
+#AppleBot
 
 #library imports
 import os
@@ -8,6 +8,7 @@ import math
 import importlib
 import json
 import threading
+import shutil
 from datetime import *
 from random import *
 from javax.swing import JFrame, JButton, JLabel, JScrollPane, JTextArea, JPanel, JButton
@@ -31,26 +32,27 @@ Settings.ActionLogs = 0
 ############################################################
 
 #in case ping latency is too high, increase the waiting time (use only integer values)
-global walk_lag_delay 
-walk_lag_delay = 2
+global walk_interval
+walk_interval = 2
 
-#center of screen
+#center of screen (char's feet coordinates)
 global screen_center_x
 global screen_center_y
-screen_center_x = 640
-screen_center_y = 280
-
-#hotkey presets
+screen_center_x = 463
+screen_center_y = 297
 
 #tools
-htk_food         = Key.F12
-htk_rope         = "o"
-htk_shovel       = "p"
-htk_ring         = "l"
+rope   = "o"  
+shovel = "p"
+ring   = "l"
+amulet = "k"
+food   = "u"
 
 #spells
-htk_poison_spell = Key.F10
-htk_utura        = "5"
+exana_pox = "i"
+haste = "v"
+utura = "5"
+exeta_res = ["exeta res","6","atk",6]
 
 #############################################################
 ########  ########  ######   ####  #######  ##    ##  ######  
@@ -63,28 +65,12 @@ htk_utura        = "5"
 #############################################################
 
 #watchable regions
-statusbar_region  = Region(1111,451,110,15)
+debuff_region     = Region(1111,451,110,15)
+equip_region      = Region(1109,307,114,145)
 battlelist_region = Region(1104,469,30,120)
-warning_region    = Region(658,440,34,14)
-game_region       = Region(401,105,478,350)
-valuable_region   = Region(360,732,546,41)
-ammo_region       = Region(1184,394,37,36)
-ring_region       = Region(1111,394,34,34)
-
-##########################################################################
-########  ########  #### ##    ## ########    ##        #######   ######   
-##     ## ##     ##  ##  ###   ##    ##       ##       ##     ## ##    ##  
-##     ## ##     ##  ##  ####  ##    ##       ##       ##     ## ##        
-########  ########   ##  ## ## ##    ##       ##       ##     ## ##   #### 
-##        ##   ##    ##  ##  ####    ##       ##       ##     ## ##    ##  
-##        ##    ##   ##  ##   ###    ##       ##       ##     ## ##    ##  
-##        ##     ## #### ##    ##    ##       ########  #######   ######     
-##########################################################################
-
-#receives a message and print it onto jframe
-def log(message):
-    textArea.append(str(datetime.now().strftime("%H:%M:%S.%f - "))+str(message)+"\n")
-    textArea.setCaretPosition(textArea.getDocument().getLength())
+game_region       = Region(226,124,474,348)
+message_region   = Region(226,443,477,31)
+action_bar_region = Region(1,482,925,40)
 
 #############################################################################################
 ########  #### ##     ## ######## ##           ######   #######  ##        #######  ########  
@@ -97,7 +83,7 @@ def log(message):
 #############################################################################################
 
 #returns the color (HEX) of one exact pixel on the screen
-def get_pixel_color(posX,posY):   
+def pixelColor(posX,posY):   
     pixel = Robot().getPixelColor(posX,posY)
     r = pixel.getRed()
     g = pixel.getGreen() 
@@ -106,7 +92,7 @@ def get_pixel_color(posX,posY):
     return color
 
 #to be used exclusively by the healer thread
-def get_healer_color(posX,posY):
+def healerColor(posX,posY):
     pixel = Robot().getPixelColor(posX,posY)
     r = pixel.getRed()
     g = pixel.getGreen() 
@@ -127,8 +113,9 @@ def get_healer_color(posX,posY):
 
 def logoff_function():
     
-    if statusbar_region.exists("battleon.png"):
+    if debuff_region.exists("battleon.png"):
         log("Battle icon on - Waiting 30 secs")
+        attack_function()
         wait(30)
         log("Trying to logoff again...")
         logoff_function()
@@ -138,8 +125,7 @@ def logoff_function():
         type("3", KeyModifier.CMD + KeyModifier.SHIFT)
         type("l", KeyModifier.CMD)
         log("[END OF EXECUTION]")
-        stop_threads = 1
-        type("c", KeyModifier.CMD + KeyModifier.SHIFT)
+        closeFrame(0)
 
 ###########################################################################################
 ##      ##    ###    ##    ## ########   #######  #### ##    ## ######## ######## ########  
@@ -172,7 +158,7 @@ def waypointer(label,wp):
     return wp_action
  
 def walking_check(time_stopped,wp_action,label,wp):
-    while time_stopped != walk_lag_delay:
+    while time_stopped != walk_interval:
         minimap_region    = Region(1109,161,115,119)
         minimap_region.onChange(1,changeHandler)
         minimap_region.somethingChanged = False
@@ -180,17 +166,20 @@ def walking_check(time_stopped,wp_action,label,wp):
         
         #if enters here, means char is still walking
         if minimap_region.somethingChanged:
-            
             time_stopped = 0
+            while debuff_region.exists("paralysed.png",0): 
+                type(haste)
+                wait(0.5)
             
             #verifies if it should engage combat while walking
             if label == "hunt" and lure_mode == 0: 
-                battleList = get_pixel_color(1117,495)
-                if battleList != "323232":
+                slot1 = pixelColor(1130,500)
+                if slot1 == "000000":
+                    log("Mob detected on battle list while walking")
                     type(Key.ESC)
                     wait(0.5)
                     attack_function()
-                    waypointer(label,wp)
+                    if running == 1: waypointer(label,wp)
                 else: pass
                 
             #in case shouldn't engane combat
@@ -203,30 +192,19 @@ def walking_check(time_stopped,wp_action,label,wp):
         continue
     else: return
 
-#sikuli default function to verify if something is changing on screen
+#function to verify if something is changing on screen
 def changeHandler(event):
     event.region.somethingChanged = True
     event.region.stopObserver()
-    
-####################################################################################
-##      ## ########        ###     ######  ######## ####  #######  ##    ##  ######  
-##  ##  ## ##     ##      ## ##   ##    ##    ##     ##  ##     ## ###   ## ##    ## 
-##  ##  ## ##     ##     ##   ##  ##          ##     ##  ##     ## ####  ## ##       
-##  ##  ## ########     ##     ## ##          ##     ##  ##     ## ## ## ##  ######  
-##  ##  ## ##           ######### ##          ##     ##  ##     ## ##  ####       ## 
-##  ##  ## ##           ##     ## ##    ##    ##     ##  ##     ## ##   ### ##    ## 
- ###  ###  ##           ##     ##  ######     ##    ####  #######  ##    ##  ######  
-####################################################################################
 
 #wp_action list:
-        #0: indicates its a normal waypoint
         #1: use rope
         #2: use ladder
         #3: use shovel
 
 def waypoint_action(wp_action): 
     if wp_action == 1:
-        type(htk_rope)
+        type(rope)
         click(Location(screen_center_x,screen_center_y))
         log("Using rope")
         
@@ -235,74 +213,12 @@ def waypoint_action(wp_action):
         log("Using ladder")
         
     if wp_action == 3:
-        type(htk_shovel)
+        type(shovel)
         click(Location(screen_center_x,screen_center_y))
         log("Using shovel")    
         
     wait(1)
     return
-
-########################################################    
-##     ## ########    ###    ##       ######## ########  
-##     ## ##         ## ##   ##       ##       ##     ## 
-##     ## ##        ##   ##  ##       ##       ##     ## 
-######### ######   ##     ## ##       ######   ########  
-##     ## ##       ######### ##       ##       ##   ##   
-##     ## ##       ##     ## ##       ##       ##    ##  
-##     ## ######## ##     ## ######## ######## ##     ##
-########################################################
-
-bad_color = ("1b2953","1b2853")
-
-def healer_function(arg):
-    while stop_threads == 0:
-
-        if vocation == 0:
-            life40 = get_healer_color(1175,281)
-            if life40 in bad_color:
-                log("[HEALER] Using small health potion")
-                type(Key.F1)
-            wait(1)
-            continue
-            
-        else:
-
-            exhaustedPot  = 0
-            exhustedSpell = 0
-
-            life40 = get_healer_color(1155,281)
-            if life40 in bad_color:
-                log("[HEALER] Using life potion")
-                type(Key.F3)
-                exhaustedPot = 1
-
-            mana50 = get_healer_color(1175,294)
-            if mana50 in bad_color:
-                if exhaustedPot == 1: wait(1)
-                log("[HEALER] using mana potion")
-                type("3")
-                exhaustedPot = 1
-
-            life80 = get_healer_color(1190,281)
-            if life80 in bad_color:
-                log("[HEALER] using intense heal spell")
-                type(Key.F1)
-                exhaustedSpell = 1
-
-            wait(1)
-            continue
-        
-    else: print "Ending healer thread"
-   
-def startHealerThread():
-    healer_thread = threading.Thread(target=healer_function, args = (0,))
-    if healer_thread.isAlive() == False:
-        print "Starting healer thread"
-        healer_thread.start()
-    else: 
-        print "Healer thread already running"
-
-stop_threads = 0
 
 ########################################################
 ########    ###    ########   ######   ######## ######## 
@@ -315,25 +231,204 @@ stop_threads = 0
 ########################################################
 
 def attack_function():
-    log("Monster detected on Battle List")
+
     type(Key.SPACE)
+    wait(0.3)
+
     attacking()
+    
+    #img = capture(game_region)
+    #shutil.move(img,os.path.join(r"/Users/GabrielMargonato/Downloads/SIKULI/DATASET/"+str(int(time.time()))+'.png'))
+    
     #checks for new mob on screen
-    battleList = get_pixel_color(1117,495)
-    if battleList != "323232": attack_function()
+    slot1 = pixelColor(1130,500)
+    if slot1 == "000000": attack_function()
+    
     else:
         log("Battle list clear")
         return
     
 def attacking(): 
-    battlelist_region.waitVanish("atk_small.png",30) #waits for 30 seconds before switching mob
+   
+    battlelist_region.waitVanish("bl_target.png",30) #waits for 30 seconds before switching mob
+    
+    #after mob is dead:
+    
     if loot_type == 1: 
         melee_looter()
-        if valuable_region.exists("valuable_loot.png",0): melee_looter()
-    elif loot_type == 2 and valuable_region.exists("valuable_loot.png",0):
-        melee_looter();melee_looter()
+        if message_region.exists("valuable_loot.png",0): 
+            log("[LOOTER] Valuable loot dropped!")
+            melee_looter()
+        
+    elif loot_type == 2 and message_region.exists("valuable_loot.png",0):
+        log("[LOOTER] Valuable loot dropped!")
+        melee_looter()
+        melee_looter()
+
+    elif loot_type == 3: 
+        try:target_loot()
+        except: pass
+
     else: return
 
+#################################################################
+##        #######   #######  ######## ######## ######## ########  
+##       ##     ## ##     ##    ##       ##    ##       ##     ## 
+##       ##     ## ##     ##    ##       ##    ##       ##     ## 
+##       ##     ## ##     ##    ##       ##    ######   ########  
+##       ##     ## ##     ##    ##       ##    ##       ##   ##   
+##       ##     ## ##     ##    ##       ##    ##       ##    ##  
+########  #######   #######     ##       ##    ######## ##     ## 
+#################################################################
+
+#loot_type = 0 -> dont take loot at all
+#loot_type = 1 -> loot everything
+#loot_type = 2 -> loot only valuable
+#loot_type = 3 -> automaticly identy and loot corpse on the game_region
+
+def melee_looter():
+    log("Looting around char")
+    click(Location(430,265),8) #1
+    click(Location(462,265),8) #2
+    click(Location(495,265),8) #3
+    click(Location(495,297),8) #4   
+    click(Location(495,330),8) #5
+    click(Location(462,330),8) #6
+    click(Location(430,330),8) #7    
+    click(Location(430,297),8) #8
+    click(Location(screen_center_x,screen_center_y),8) #9
+
+def target_loot():
+    wait(1)
+    corpses_on_screen = findAnyList(loot_corpses)
+    for corpse in corpses_on_screen:
+        log("Looting at "+str(corpse.getX())+","+str(corpse.getY()))
+        click(corpse,8)
+        hover(Location(screen_center_x,screen_center_y))
+        last_loot_region = Region(3,760,173,18)
+        last_loot_region.wait("looted_1.png",3)
+        break
+ 
+###########
+# THREADS #  
+###########
+
+#function to prevent being exhausted
+def sendHotkey(actionList):
+    
+    #                0        1       2       3
+    #actionList = ["name","hotkey","type",cooldown]
+    
+    global lastHeal
+    global lastObj
+    global lastSupp
+    
+    #                0        1       2       3        4
+    #actionList = ["name","hotkey","type",cooldown,last_cast]
+
+    global atk_spell_1
+    global atk_spell_2
+    global atk_spell_3
+    
+    now = datetime.now()
+               
+    if actionList[2] == "heal":
+    
+        diff = (now - lastHeal).total_seconds()
+        if diff >= actionList[3]:
+            log("Casting heal spell \'"+actionList[0]+"\'")
+            type(actionList[1])        
+            lastHeal = datetime.now()
+
+    if actionList[2] == "object":
+    
+        diff = (now - lastObj).total_seconds()
+        if diff >= actionList[3]:
+            log("Using item \'"+actionList[0]+"\'")
+            type(actionList[1])        
+            lastObj = datetime.now()
+     
+    if actionList[2] == "atk":
+        
+        diff = (now - actionList[4]).total_seconds()
+        if diff >= actionList[3]:
+            log("Casting attack spell \'"+actionList[0]+"\'")            
+            type(actionList[1])        
+            actionList[4] = datetime.now()
+            sleep(2)
+
+
+#Healing
+def healer_function(arg):
+    while running == 1:
+
+        if running == 0: break
+
+        if vocation == 0:
+
+            life = healerColor(15,55)
+            if life == "bc8900" or life == "b01a20": 
+                sendHotkey(light_heal) 
+                if life == "b01a20":
+                    img = capture(Screen().getBounds())
+                    shutil.move(img,os.path.join(r"/Users/GabrielMargonato/Downloads/SIKULI/SESSIONS/"+str(session_id)+'_red_life.png'))
+       
+            sleep(1)
+            continue
+            
+        else:
+
+            life = healerColor(15,55)
+            if life == "b01a20": 
+                sendHotkey(emergency_heal)  
+                img = capture(Screen().getBounds())
+                shutil.move(img,os.path.join(r"/Users/GabrielMargonato/Downloads/SIKULI/SESSIONS/"+str(session_id)+'_red_life.png'))
+       
+            mana = healerColor(660,71)
+            if mana != "00266d": sendHotkey(mana_pot)  
+            
+            if life == "bc8900": sendHotkey(intense_heal)         
+            if life == "5a9200": sendHotkey(light_heal)  
+
+    else: print "Ending healer thread"
+
+def startHealerThread():
+    healer_thread = threading.Thread(target=healer_function, args = (0,))
+    if healer_thread.isAlive() == False:
+        print "Starting healer thread"
+        healer_thread.start()
+    else: 
+        print "[ERROR] Healer thread already running"
+    
+#Targeting Spell  
+def spell_caster_function(arg):
+    while running == 1:  
+        
+        if battlelist_region.exists("bl_target.png",0):   
+            
+            #cast primary atk spell
+            sendHotkey(atk_spell_1)
+            if lure_mode == 1 or use_exeta == 1: sendHotkey(exeta_res)
+
+            if lure_mode == 1:     near_targets("box")
+            if stay_diagonal == 1: near_targets("diagonal")
+            if take_distance == 1: near_targets("distance")
+
+            if running == 0: break
+
+        else: sleep(1)
+    
+    else: print "Ending spell caster thread"
+
+def startSpellCasterThread():
+    spell_cast_thread = threading.Thread(target=spell_caster_function, args = (0,))
+    if spell_cast_thread.isAlive() == False:
+        print "Starting spell caster thread"
+        spell_cast_thread.start()
+    else: 
+        print "[ERROR] Spell caster thread already running"
+    
+    
 #checks for targets around character
 def near_targets(mode):
 
@@ -341,15 +436,16 @@ def near_targets(mode):
     #4 c 5
     #6 7 8
 
-    pos1 = get_pixel_color(595,228)
-    pos2 = get_pixel_color(627,228)
-    pos3 = get_pixel_color(659,228)
-    pos4 = get_pixel_color(595,260)    
-    pos5 = get_pixel_color(659,260)
-    pos6 = get_pixel_color(595,292)
-    pos7 = get_pixel_color(627,292)
-    pos8 = get_pixel_color(659,292)
+    pos1 = pixelColor(445,247)
+    pos2 = pixelColor(477,247)
+    pos3 = pixelColor(509,247)
+    pos4 = pixelColor(445,279)    
+    pos5 = pixelColor(509,279)
+    pos6 = pixelColor(445,311)
+    pos7 = pixelColor(477,311)
+    pos8 = pixelColor(509,311)
 
+    ######################
     if mode == "box":
         
         targets_around = 0
@@ -364,42 +460,32 @@ def near_targets(mode):
         if pos8 == "000000": targets_around += 1
         
         if targets_around >= 4: 
-            log("[TARGETING] Casting box spell")
-            type("f")
-            wait(2)
+            sendHotkey(atk_spell_2)
             return
 
-    if mode == "front":
-        
-        if (pos1 == "000000" and pos2 == "000000" and pos3 == "000000"):
-            type(Key.UP, KeyModifier.CMD)
-            log("[TARGETING] Casting front spell (Up)")
-            type("g")
-            wait(2)
-            return
-        
-        elif (pos1 == "000000" and pos4 == "000000" and pos6 == "000000"): 
-            type(Key.LEFT, KeyModifier.CMD)
-            log("[TARGETING] Casting front spell (Left)")
-            type("g")
-            wait(2)
-            return
-        
-        elif (pos6 == "000000" and pos7 == "000000" and pos8 == "000000"):
-            type(Key.DOWN, KeyModifier.CMD)
-            log("[TARGETING] Casting front spell (Down)")
-            type("g")
-            wait(2)
-            return
-        
-        elif (pos3 == "000000" and pos5 == "000000" and pos8 == "000000"):
-            type(Key.RIGHT, KeyModifier.CMD)
-            log("[TARGETING] Casting front spell (Right)")
-            wait(2)
-            type("g")
+        else:
+
+            if (pos1 == "000000" and pos2 == "000000" and pos3 == "000000"):
+                type(Key.UP, KeyModifier.CMD)
+                sendHotkey(atk_spell_3)
+                return
             
-        else: return
+            elif (pos1 == "000000" and pos4 == "000000" and pos6 == "000000"): 
+                type(Key.LEFT, KeyModifier.CMD)
+                sendHotkey(atk_spell_3)
+                return
+            
+            elif (pos6 == "000000" and pos7 == "000000" and pos8 == "000000"):
+                type(Key.DOWN, KeyModifier.CMD)
+                sendHotkey(atk_spell_3)
+                return
+            
+            elif (pos3 == "000000" and pos5 == "000000" and pos8 == "000000"):
+                type(Key.RIGHT, KeyModifier.CMD)
+                sendHotkey(atk_spell_3)
+                return
 
+    ######################
     if mode == "diagonal":
         
         if (pos2 == "000000" or pos7 == "000000"): 
@@ -415,114 +501,26 @@ def near_targets(mode):
         else: return
     
     if mode == "distance":
-        
-        #mob on top
-        if (pos1 == "000000" or pos2 == "000000" or pos3 == "000000"): 
-            type(Key.DOWN)
-            walk = randint(1,2)
-            if walk == 1: type(Key.LEFT)
-            if walk == 2: type(Key.RIGHT)
-            return
-        
-        #mob on the left
-        elif (pos1 == "000000" or pos4 == "000000" or pos6 == "000000"): 
-            type(Key.RIGHT)
-            walk = randint(1,2)
-            if walk == 1: type(Key.UP)
-            if walk == 2: type(Key.DOWN)
-            return
+
+        targetLifeBar = "target_life_bar.png"
+
+        gr1 = Region(225,125,255,185)
+        gr2 = Region(449,124,252,191)
+        gr3 = Region(226,284,253,187)
+        gr4 = Region(450,284,251,187)
+        if gr1.exists(targetLifeBar,0): 
+            type(Key.RIGHT);type(Key.DOWN)
             
-        #mob on the right
-        elif (pos3 == "000000" or pos5 == "000000" or pos8 == "000000"): 
-            type(Key.LEFT)
-            walk = randint(1,2)
-            if walk == 1: type(Key.UP)
-            if walk == 2: type(Key.DOWN)
-            return
+        if gr2.exists(targetLifeBar,0): 
+            type(Key.LEFT);type(Key.DOWN)
             
-        #mob at bottom
-        elif (pos6 == "000000" or pos7 == "000000" or pos8 == "000000"): 
-            type(Key.UP)
-            walk = randint(1,2)
-            if walk == 1: type(Key.LEFT)
-            if walk == 2: type(Key.RIGHT)
-            return
-
-        else: return
-
-#attack spell caster
-def spell_caster_function(arg):
-    while stop_threads == 0:
-        while battlelist_region.exists("atk_small.png"):
-
-            #checks if must refill ammo
-            if refill_ammo == 1: 
-                while ammo_region.exists("arrow.png",0): 
-                    log("Refilling ammo")
-                    type("r")
-                    wait(0.5)
-
-            if stay_diagonal == 1: near_targets("diagonal")
-            if take_distance == 1: near_targets("distance")
-
-            #casts recovery
-            type(htk_utura)
-                       
-            #casts area spell            
-            if lure_mode == 1:
-
-                near_targets("box")
-                near_targets("front")
-
-            #casts target spell
-            type("2"); wait(2)
-
-            if stop_threads == 0: break
-                                      
-    else: print "Ending spell caster thread"
-
-def startSpellCasterThread():
-    spell_cast_thread = threading.Thread(target=spell_caster_function, args = (0,))
-    if spell_cast_thread.isAlive() == False:
-        print "Starting spell caster thread"
-        spell_cast_thread.start()
-    else: 
-        print "Spell caster thread already running"
-  
-#################################################################
-##        #######   #######  ######## ######## ######## ########  
-##       ##     ## ##     ##    ##       ##    ##       ##     ## 
-##       ##     ## ##     ##    ##       ##    ##       ##     ## 
-##       ##     ## ##     ##    ##       ##    ######   ########  
-##       ##     ## ##     ##    ##       ##    ##       ##   ##   
-##       ##     ## ##     ##    ##       ##    ##       ##    ##  
-########  #######   #######     ##       ##    ######## ##     ## 
-#################################################################
-
-#loot_type = 0 -> dont loot
-#loot_type = 1 -> loot everything
-#loot_type = 2 -> loot only valuable
-
-def ranged_looter():
-    log("Looting at mouse position")
-    click(atMouse(),8)
-    wait(3)
-
-def melee_looter():
-    log("Looting around char")
-    click(Location(605,250),8) #1
-    click(Location(640,250),8) #2
-    click(Location(670,250),8) #3
-    click(Location(606,280),8) #8
-    click(Location(640,280),8) #9
-    click(Location(670,280),8) #4
-    click(Location(605,312),8) #7
-    click(Location(640,312),8) #6
-    click(Location(670,312),8) #5
-
-    #moves mouse back to center of screen 
-    hover(Location(screen_center_x,screen_center_y))
-
+        if gr3.exists(targetLifeBar,0): 
+            type(Key.RIGHT);type(Key.UP)
+            
+        if gr4.exists(targetLifeBar,0): 
+            type(Key.LEFT);type(Key.UP)
+            
+        sleep(1)
 
 ####################################################################
 ########  ########   #######  ########  ########  ######## ########  
@@ -540,26 +538,20 @@ def drop_item(sprite,name):
         for i in range(imageCount):
             log("Dropping "+name+" "+str(i+1)+"/"+str(imageCount))
             dragDrop(sprite, Location(screen_center_x,screen_center_y))
-            wait(1)
+            wait(0.5)
     else: return
     
 ########################################################################################
- ######  ########    ###    ######## ##     ##  ######     ########     ###    ########  
-##    ##    ##      ## ##      ##    ##     ## ##    ##    ##     ##   ## ##   ##     ## 
-##          ##     ##   ##     ##    ##     ## ##          ##     ##  ##   ##  ##     ## 
- ######     ##    ##     ##    ##    ##     ##  ######     ########  ##     ## ########  
-      ##    ##    #########    ##    ##     ##       ##    ##     ## ######### ##   ##   
-##    ##    ##    ##     ##    ##    ##     ## ##    ##    ##     ## ##     ## ##    ##  
- ######     ##    ##     ##    ##     #######   ######     ########  ##     ## ##     ## 
+# DEBUFF
 ########################################################################################
 
-def status_bar_check():
-    if statusbar_region.exists("food.png",0):type(htk_food)
-    if statusbar_region.exists("poison.png",0):type(htk_poison_spell)
-    if equip_ring == 1:
-        if ring_region.exists("ring.png",0):
-            log("Equipping ring")
-            type(htk_ring)
+def debuff_check():
+    if action_bar_region.exists(Pattern("1607028632854.png").exact(),0) or action_bar_region.exists(Pattern("1607028692864.png").exact(),0): type(utura)
+    #while debuff_region.exists("paralysed.png",0): type(haste)
+    #while debuff_region.exists("food.png",0): type(food)
+    #while debuff_region.exists("poison.png",0): type(exana_pox)
+    if (equip_ring == 1 and equip_region.exists("ring.png",0)): type(ring)
+    if (equip_amulet == 1 and equip_region.exists("amulet.png",0)): type (amulet)
     else:return
     
 #########################################################################
@@ -575,92 +567,90 @@ def status_bar_check():
 def script_selector_function():
     script_list = (
             "-nothing selected-",
-            ">>BLESS MAKER<<",
-            "[NV] Poison Spider",
-            "[NV] Mino Hell",
-            "[EK] Venore Amazon Camp",
-            "[EK] Ab Wasp Cave",
-            "[EK] Meriana Island",
-            "[RP] Sea Serpents",
-            "[EK] Formorgar Cults",
-            "[EK] Darashia Dragons"
+            "Rook Mino Hell",
+            "Yalahar Mutated Tigers",
+            "Edron Bog Raider"
     )
     prompt = select("Please select a script from the list","Available Scripts", options = script_list, default = script_list[0])
 
-    if prompt == script_list[1]: selected_script = "bless"
-    elif prompt == script_list[2]: selected_script = "rook_psc"
-    elif prompt == script_list[3]: selected_script = "mino_hell"
-    elif prompt == script_list[4]: selected_script = "amazon_camp"
-    elif prompt == script_list[5]: selected_script = "ab_wasp"
-    elif prompt == script_list[6]: selected_script = "meriana"
-    elif prompt == script_list[7]: selected_script = "sea_serpents"
-    elif prompt == script_list[8]: selected_script = "formorgar_cults"
-    elif prompt == script_list[9]: selected_script = "darashia_dragons"
+    global selected_script
+
+    if   prompt == script_list[1]: selected_script = "mino_hell" 
+    elif prompt == script_list[2]: selected_script = "ylr_mut_tiger"
+    elif prompt == script_list[3]: selected_script = "bog_raider_edron" 
     else:
         popup("The selected script is not valid, terminating execution")
-        log("[END OF EXECUTION] No Script was selected!")
         closeFrame(0)
-        type('c', KeyModifier.CMD + KeyModifier.SHIFT)
+        raise Exception("Invalid Script")
+       
+    log("Selected Script: "+selected_script)
 
-    script_loader(selected_script)
-
-#loads basic configuration from selected script
-def script_loader(selected_script):
-
+    #declare global variables
     global imported_script
-    global loot_type
-    global lure_mode
-    global equip_ring
-    global drop_vials
-    global refill_ammo
-    global stay_diagonal
-    global take_distance
-    global vocation
+    
+    global vocation      
+    global loot_type     
+    global lure_mode  
+    global use_exeta
+    global equip_ring    
+    global equip_amulet  
+    global drop_vials    
+    global stay_diagonal 
+    global take_distance 
+    
+    global utura
+    global light_heal    
+    global intense_heal  
+    global emergency_heal
+    global mana_pot   
+    
+    global atk_spell_1
+    global atk_spell_2
+    global atk_spell_3
+    
     global minimap_zoom
     global last_hunt_wp
     global last_leave_wp
     global last_go_hunt_wp
     
-    log("[CORE] Selected Script: "+selected_script)
-
     #imports the script that will be executed on this session
     imported_script = importlib.import_module(selected_script)
     
-    #read variables from imported script
+    #set variables
+    vocation      = imported_script.vocation
     loot_type     = imported_script.loot_type
+
+    if loot_type == 3: 
+        global loot_corpses
+        loot_corpses = imported_script.loot_corpses
+                                                            
     lure_mode     = imported_script.lure_mode
+
+    try: use_exeta = imported_script.use_exeta
+    except: use_exeta = 0
+    
     equip_ring    = imported_script.equip_ring
+    equip_amulet  = imported_script.equip_amulet
     drop_vials    = imported_script.drop_vials
-    refill_ammo   = imported_script.refill_ammo
     stay_diagonal = imported_script.stay_diagonal
     take_distance = imported_script.take_distance
-    vocation      = imported_script.vocation
+
+    #heal
+    light_heal     = imported_script.light_heal
+    intense_heal   = imported_script.intense_heal
+    emergency_heal = imported_script.emergency_heal
+    mana_pot       = imported_script.mana_pot
+    
+    #atk
+    atk_spell_1 = imported_script.atk_spell_1  
+    atk_spell_2 = imported_script.atk_spell_2
+    atk_spell_3 = imported_script.atk_spell_3
 
     minimap_zoom    = imported_script.minimap_zoom
     last_hunt_wp    = imported_script.last_hunt_wp
     last_leave_wp   = imported_script.last_leave_wp
     last_go_hunt_wp = imported_script.last_go_hunt_wp
     
-##########################################################
-##     ## #### ##    ## #### ##     ##    ###    ########  
-###   ###  ##  ###   ##  ##  ###   ###   ## ##   ##     ## 
-#### ####  ##  ####  ##  ##  #### ####  ##   ##  ##     ## 
-## ### ##  ##  ## ## ##  ##  ## ### ## ##     ## ########  
-##     ##  ##  ##  ####  ##  ##     ## ######### ##        
-##     ##  ##  ##   ###  ##  ##     ## ##     ## ##        
-##     ## #### ##    ## #### ##     ## ##     ## ##        
-##########################################################
-
-def set_minimap_zoom(minimap_zoom):
-    log("[CORE] Adjusting minimap zoom to "+str(minimap_zoom))
-    #subtract zoom
-    for i in range(0,3):
-        click(Location(1240,246))
-    
-    #add zoom
-    for i in range(0,minimap_zoom):
-        click(Location(1240,227))
-             
 ###############################################
 ######## ########     ###    ##     ## ######## 
 ##       ##     ##   ## ##   ###   ### ##       
@@ -671,29 +661,28 @@ def set_minimap_zoom(minimap_zoom):
 ##       ##     ## ##     ## ##     ## ######## 
 ###############################################
 
+#receives a message and print it onto jframe
+def log(message):
+    textArea.append(str(datetime.now().strftime("%H:%M:%S.%f - "))+str(message)+"\n")
+    textArea.setCaretPosition(textArea.getDocument().getLength())
+
 def closeFrame(event):
-    global stop_threads
-    stop_threads = 1
+    global running
+    running = 0
     frame.dispose()
 
-def quitBot(event):
-    sys.exit()
-
-frame = JFrame("Console Log")
+frame = JFrame("AppleBot - Console Log")
 frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE)
-frame.setBounds(358,22,560,70)
+frame.setBounds(8,545,600,70)
 contentPane = JPanel()
 frame.setContentPane(contentPane)
 
 buttonS = JButton("STOP", actionPerformed = closeFrame)
-buttonS.setForeground(Color.ORANGE)
+buttonS.setForeground(Color.RED)
 frame.add(buttonS,WEST)
 
-#buttonQ = JButton("QUIT", actionPerformed = quitBot)
-#buttonQ.setForeground(Color.RED)
-#frame.add(buttonQ,WEST)
-
-textArea = JTextArea(4,38)
+textArea = JTextArea(6,38)
+#textArea.setFont(textArea.getFont().deriveFont(textArea.getFont().getSize() - 2.5))
 textArea.setEditable(False)
 contentPane.add(textArea)
 scrollPane = JScrollPane(textArea, JScrollPane.VERTICAL_SCROLLBAR_ALWAYS, JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED)
@@ -702,12 +691,16 @@ frame.setUndecorated(True)
 frame.setAlwaysOnTop(True)
 frame.pack()
 frame.setVisible(True)
-log("[CORE] Initializing bot")
-log("[ATTENTION] Walk interval is set to "+str(walk_lag_delay)+" seconds")
+log("Initializing bot")
 
 ###############################################
 ############### BOT STARTS HERE ###############
 ###############################################
+
+#generates an ID for this session
+session_id = str(datetime.now().strftime("%d%m%Y%H%M"))
+log("Session ID: "+str(session_id))
+
 #calls script selector
 script_selector_function()
 
@@ -727,27 +720,51 @@ if label == "leave":
 list_of_wps = map(str, available_wps)
 wp_str = select("Choose a starting waypoint",label, list_of_wps, default = 0)
 wp = int(wp_str)
-log("[CORE] Starting at "+label+" waypoint "+str(wp))
 
-#variable to count number of not-found waypoints during execution
-wp_errors = 0
+log("Starting at "+label+" waypoint "+str(wp))
+log("[ATTENTION] Walk interval is set to "+str(walk_interval)+" seconds")
 
-#set focus on game client
-App.focus("Tibia")
-                
+
+#If game client exists, focus on it. Else, throws exception
+if(App("Tibia").isRunning() == True): App.focus("Tibia")
+else:
+    frame.dispose()
+    raise Exception('Tibia client not running.')
+
 #shows ping on game screen
-type(Key.F8, KeyModifier.ALT)
+if not exists(Pattern("ping.png").similar(0.50),0): type(Key.F8, KeyModifier.ALT)
 
-#adjusts the minimap zoom
-set_minimap_zoom(minimap_zoom)
+#adjusts the starting minimap zoom for this session
+def adjust_minimap_zoom():
+    #subtract zoom
+    for i in range(0,3):
+        click(Location(1240,246))
+    
+        #add zoom
+    for i in range(0,minimap_zoom):
+        click(Location(1240,227))
+
+log("Adjusting minimap zoom to "+str(minimap_zoom))
+adjust_minimap_zoom()
 
 #sets session channel
 if loot_type >= 1: click("loot_channel.png")
 else: click("server_log_channel.png")
 
-#start thereads
+#start threads
+lastObj  = datetime.now()
+lastHeal = datetime.now()
+lastSupp = datetime.now()    
+atk_spell_1.append(datetime.now())
+atk_spell_2.append(datetime.now())
+atk_spell_3.append(datetime.now())
+exeta_res.append(datetime.now())
+
+
+running = 1
 startHealerThread()
-if vocation != 0: startSpellCasterThread()
+if vocation > 0: startSpellCasterThread()
+
 
 ##################################################################
  ######     ###    ##     ## ######## ########   #######  ######## 
@@ -760,21 +777,21 @@ if vocation != 0: startSpellCasterThread()
 ##################################################################
 
 #Main
-while stop_threads == 0:
-
-    #[BUG] makes console frame re-appear (it may vanish after a while)
-    #frame.visible = True
-    
+while running == 1:
+ 
     if label == "hunt": 
-        battleList = get_pixel_color(1117,495)
-        if battleList != "323232": attack_function()
-        #status_bar_check()
+        slot1 = pixelColor(1130,500)
+        if slot1 == "000000": 
+            log("Mob detected on battle list")
+            attack_function()
+        if vocation > 0: debuff_check()
+
+    if running == 0: closeFrame(0);break
     
     try: 
         wp_action = waypointer(label,wp)
         #verifies if should perform some action when reaches destination
-        if wp_action > 0:
-            waypoint_action(wp_action)
+        if wp_action > 0: waypoint_action(wp_action)
             
         #After arriving at destination waypoint
         log("Arrived at "+label+" waypoint "+str(wp))
@@ -782,14 +799,25 @@ while stop_threads == 0:
         #########################################
         #current waypoint is the last one for hunt
         if (label == "hunt" and wp >= last_hunt_wp):
-            #check if it should leave the hunt
-            log("[CORE] Checking for exit conditions...")
-            label = imported_script.check_exit()
-            wp = 1
+
+            #check if should drop vials
             if drop_vials == 1: 
-                log("[CORE] Dropping vials...")
+                log("Looking for vials to drop...")
                 drop_item(Pattern("small_flask.png").exact(),"small empty flask")
                 drop_item(Pattern("strong_flask.png").exact(),"strong empty flask")
+                drop_item(Pattern("great_flask.png").exact(),"great empty flask")
+            
+            #check if it should leave the hunt
+            log("Checking for exit conditions...")
+            label = imported_script.exit_conditions()
+
+            #reset waypoint back to 1
+            wp = 1
+               
+            #prints the screen after a sucessfull run and saves it
+            log("Printing session ID "+str(session_id)) 
+            img = capture(Screen().getBounds())
+            shutil.move(img,os.path.join(r"/Users/GabrielMargonato/Downloads/SIKULI/SESSIONS/"+session_id+'.png'))
     
         ##########################################
         #current waypoint is the last one for leave
@@ -799,7 +827,7 @@ while stop_threads == 0:
         ##########################################
         #current waypoint is the last one for go_hunt
         elif label == "go_hunt" and wp >= last_go_hunt_wp:
-            log("[CORE] Setting label to Hunt")
+            log("Setting label to Hunt")
             label = "hunt"
             wp = 1
             
@@ -808,11 +836,18 @@ while stop_threads == 0:
         else: 
             wp+=1
     except:
-        log("[ERROR] Waypoint "+str(wp)+" not found for "+label)
-        wp_errors += 1
-        print "WP errors:",wp_errors
-        wp+=1
-        pass
+        log("[ERROR] waypoint "+label+" "+str(wp)+" not found!")
+        #move to next waypoint
+        if   label == "go_hunt" and wp > last_go_hunt_wp:
+            adjust_minimap_zoom()
+            wp = 1
+        elif label == "hunt"    and wp > last_hunt_wp: 
+            adjust_minimap_zoom()
+            wp = 1
+        elif label == "leave"   and wp > last_leave_wp: 
+            adjust_minimap_zoom()
+            wp = 1
+        else: wp+=1
 
 else: popup("END")
 #end
