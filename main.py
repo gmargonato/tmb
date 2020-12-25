@@ -20,6 +20,8 @@ from sikuli import *
 Settings.ObserveScanRate = 10
 Settings.MoveMouseDelay = 0
 Settings.ActionLogs = 0
+Settings.InfoLogs = 0
+Settings.DebugLogs = 0
 
 ############################################################
  ######   #######  ##    ## ######## ####  ######    ######  
@@ -33,7 +35,7 @@ Settings.ActionLogs = 0
 
 #in case ping latency is too high, increase the waiting time (use only integer values)
 global walk_interval
-walk_interval = 2
+walk_interval = 1
 
 #center of screen (char's feet coordinates)
 global screen_center_x
@@ -53,6 +55,8 @@ exana_pox = "i"
 haste = "v"
 utura = "5"
 exeta_res = ["exeta res","6","atk",6]
+min_to_box = 0
+min_to_align = 1
 
 #############################################################
 ########  ########  ######   ####  #######  ##    ##  ######  
@@ -69,7 +73,7 @@ debuff_region     = Region(1111,451,110,15)
 equip_region      = Region(1109,307,114,145)
 battlelist_region = Region(1104,469,30,120)
 game_region       = Region(226,124,474,348)
-message_region   = Region(226,443,477,31)
+message_region    = Region(226,443,477,31)
 action_bar_region = Region(1,482,925,40)
 
 #############################################################################################
@@ -188,6 +192,7 @@ def walking_check(time_stopped,wp_action,label,wp):
         #if nothing changes on the screen for some time, add 1 to stopped timer
         if not minimap_region.somethingChanged:
             time_stopped+=1
+            log("Walking "+str(time_stopped)+"/"+str(walk_interval)+" seconds")
 
         continue
     else: return
@@ -220,21 +225,20 @@ def waypoint_action(wp_action):
     wait(1)
     return
 
-########################################################
-########    ###    ########   ######   ######## ######## 
-   ##      ## ##   ##     ## ##    ##  ##          ##    
-   ##     ##   ##  ##     ## ##        ##          ##    
-   ##    ##     ## ########  ##   #### ######      ##    
-   ##    ######### ##   ##   ##    ##  ##          ##    
-   ##    ##     ## ##    ##  ##    ##  ##          ##    
-   ##    ##     ## ##     ##  ######   ########    ##   
-########################################################
+###############################################################################
+   ###    ######## ########    ###     ######  ##    ## #### ##    ##  ######   
+  ## ##      ##       ##      ## ##   ##    ## ##   ##   ##  ###   ## ##    ##  
+ ##   ##     ##       ##     ##   ##  ##       ##  ##    ##  ####  ## ##        
+##     ##    ##       ##    ##     ## ##       #####     ##  ## ## ## ##   #### 
+#########    ##       ##    ######### ##       ##  ##    ##  ##  #### ##    ##  
+##     ##    ##       ##    ##     ## ##    ## ##   ##   ##  ##   ### ##    ##  
+##     ##    ##       ##    ##     ##  ######  ##    ## #### ##    ##  ######   
+###############################################################################
 
 def attack_function():
 
     type(Key.SPACE)
     wait(0.3)
-
     attacking()
     
     #img = capture(game_region)
@@ -246,6 +250,7 @@ def attack_function():
     
     else:
         log("Battle list clear")
+        if loot_type == 4: melee_looter()
         return
     
 def attacking(): 
@@ -257,11 +262,11 @@ def attacking():
     if loot_type == 1: 
         melee_looter()
         if message_region.exists("valuable_loot.png",0): 
-            log("[LOOTER] Valuable loot dropped!")
+            log("[ATTENTION] Valuable loot dropped")
             melee_looter()
         
     elif loot_type == 2 and message_region.exists("valuable_loot.png",0):
-        log("[LOOTER] Valuable loot dropped!")
+        log("[ATTENTION] Valuable loot dropped")
         melee_looter()
         melee_looter()
 
@@ -281,10 +286,11 @@ def attacking():
 ########  #######   #######     ##       ##    ######## ##     ## 
 #################################################################
 
-#loot_type = 0 -> dont take loot at all
+#loot_type = 0 -> ignore loot
 #loot_type = 1 -> loot everything
 #loot_type = 2 -> loot only valuable
-#loot_type = 3 -> automaticly identy and loot corpse on the game_region
+#loot_type = 3 -> identy a corpse from loot_corpses list inside game_region
+#loot_type = 4 -> loot only after clearing the battle list (best used with lure_mode)
 
 def melee_looter():
     log("Looting around char")
@@ -301,35 +307,37 @@ def melee_looter():
 def target_loot():
     wait(1)
     corpses_on_screen = findAnyList(loot_corpses)
+    number_of_corpses_found = len(corpses_on_screen)
+    str_corpses_location = str(corpses_on_screen)[1:-1]
+    log(str(number_of_corpses_found)+" corpse(s) found on screen")
     for corpse in corpses_on_screen:
-        log("Looting at "+str(corpse.getX())+","+str(corpse.getY()))
+        log("Looting corpse at "+str(corpse.getX())+","+str(corpse.getY()))
         click(corpse,8)
         hover(Location(screen_center_x,screen_center_y))
         last_loot_region = Region(3,760,173,18)
-        last_loot_region.wait("looted_1.png",3)
+        last_loot_region.waitVanish("loot_msg.png",3)
         break
- 
-###########
-# THREADS #  
-###########
+
+#######################################################
+##     ##  #######  ######## ##    ## ######## ##    ## 
+##     ## ##     ##    ##    ##   ##  ##        ##  ##  
+##     ## ##     ##    ##    ##  ##   ##         ####   
+######### ##     ##    ##    #####    ######      ##    
+##     ## ##     ##    ##    ##  ##   ##          ##    
+##     ## ##     ##    ##    ##   ##  ##          ##    
+##     ##  #######     ##    ##    ## ########    ##    
+#######################################################
 
 #function to prevent being exhausted
 def sendHotkey(actionList):
     
     #                0        1       2       3
-    #actionList = ["name","hotkey","type",cooldown]
+    #actionList = ["name","hotkey","group",cooldown]
     
     global lastHeal
     global lastObj
     global lastSupp
-    
-    #                0        1       2       3        4
-    #actionList = ["name","hotkey","type",cooldown,last_cast]
 
-    global atk_spell_1
-    global atk_spell_2
-    global atk_spell_3
-    
     now = datetime.now()
                
     if actionList[2] == "heal":
@@ -340,23 +348,37 @@ def sendHotkey(actionList):
             type(actionList[1])        
             lastHeal = datetime.now()
 
-    if actionList[2] == "object":
+    elif actionList[2] == "object":
     
         diff = (now - lastObj).total_seconds()
         if diff >= actionList[3]:
             log("Using item \'"+actionList[0]+"\'")
             type(actionList[1])        
             lastObj = datetime.now()
-     
-    if actionList[2] == "atk":
         
+    #                0        1       2       3        4
+    #actionList = ["name","hotkey","group",cooldown,last_cast]
+    elif actionList[2] == "atk":
+    
         diff = (now - actionList[4]).total_seconds()
         if diff >= actionList[3]:
-            log("Casting attack spell \'"+actionList[0]+"\'")            
-            type(actionList[1])        
+            log("Casting attack spell \'"+actionList[0]+"\'")    
+            type(actionList[1])
             actionList[4] = datetime.now()
             sleep(2)
+        else: return
 
+    else: return
+            
+#############################################################
+##     ## ########    ###    ##       #### ##    ##  ######   
+##     ## ##         ## ##   ##        ##  ###   ## ##    ##  
+##     ## ##        ##   ##  ##        ##  ####  ## ##        
+######### ######   ##     ## ##        ##  ## ## ## ##   #### 
+##     ## ##       ######### ##        ##  ##  #### ##    ##  
+##     ## ##       ##     ## ##        ##  ##   ### ##    ##  
+##     ## ######## ##     ## ######## #### ##    ##  ######   
+#############################################################
 
 #Healing
 def healer_function(arg):
@@ -380,10 +402,12 @@ def healer_function(arg):
 
             life = healerColor(15,55)
             if life == "b01a20": 
+                sendHotkey(intense_heal)
                 sendHotkey(emergency_heal)  
                 img = capture(Screen().getBounds())
                 shutil.move(img,os.path.join(r"/Users/GabrielMargonato/Downloads/SIKULI/SESSIONS/"+str(session_id)+'_red_life.png'))
-       
+                continue
+            
             mana = healerColor(660,71)
             if mana != "00266d": sendHotkey(mana_pot)  
             
@@ -400,23 +424,44 @@ def startHealerThread():
     else: 
         print "[ERROR] Healer thread already running"
     
+################################################################################
+########    ###    ########   ######   ######## ######## #### ##    ##  ######   
+   ##      ## ##   ##     ## ##    ##  ##          ##     ##  ###   ## ##    ##  
+   ##     ##   ##  ##     ## ##        ##          ##     ##  ####  ## ##        
+   ##    ##     ## ########  ##   #### ######      ##     ##  ## ## ## ##   #### 
+   ##    ######### ##   ##   ##    ##  ##          ##     ##  ##  #### ##    ##  
+   ##    ##     ## ##    ##  ##    ##  ##          ##     ##  ##   ### ##    ##  
+   ##    ##     ## ##     ##  ######   ########    ##    #### ##    ##  ######       
+################################################################################
+
 #Targeting Spell  
 def spell_caster_function(arg):
     while running == 1:  
-        
-        if battlelist_region.exists("bl_target.png",0):   
-            
-            #cast primary atk spell
-            sendHotkey(atk_spell_1)
-            if lure_mode == 1 or use_exeta == 1: sendHotkey(exeta_res)
-
-            if lure_mode == 1:     near_targets("box")
+        if battlelist_region.exists("bl_target.png",0):            
+            if use_exeta == 1: sendHotkey(exeta_res)
             if stay_diagonal == 1: near_targets("diagonal")
-            if take_distance == 1: near_targets("distance")
 
+            #logic to cast atk spells
+            for atk_spell in atk_spells: 
+
+                #if its a box spell, call near_targets as mode = BOX
+                spell_box_list = ["exori","exori gran"]    
+                if atk_spell[0] in spell_box_list:
+                    isBoxSpell = 1
+                    green_light = near_targets("box")
+
+                #if is not a box spell, but it is an spell that requeires mob alignment, call near_targets as mode = ALIGN
+                elif atk_spell[0] == "exori min":
+                    isBoxSpell = 1
+                    green_light = near_targets("align")
+                    
+                else: isBoxSpell = 0
+        
+                if (isBoxSpell) == 0 or (isBoxSpell == 1 and green_light == 1): 
+                   sendHotkey(atk_spell)
+            
             if running == 0: break
-
-        else: sleep(1)
+        else: wait("bl_target.png",FOREVER)
     
     else: print "Ending spell caster thread"
 
@@ -428,99 +473,129 @@ def startSpellCasterThread():
     else: 
         print "[ERROR] Spell caster thread already running"
     
-    
 #checks for targets around character
 def near_targets(mode):
+
+    #                    preto    verde  vd.claro  amarelo
+    life_bar_colors = ["000000","0aba00","4eb949","b3b800"]
 
     #1 2 3
     #4 c 5
     #6 7 8
 
-    pos1 = pixelColor(445,247)
-    pos2 = pixelColor(477,247)
-    pos3 = pixelColor(509,247)
-    pos4 = pixelColor(445,279)    
-    pos5 = pixelColor(509,279)
-    pos6 = pixelColor(445,311)
-    pos7 = pixelColor(477,311)
-    pos8 = pixelColor(509,311)
+    x1 = 432 
+    x2 = 463 
+    x3 = 496
+    
+    y1 = 246
+    y2 = 278
+    y3 = 310
+    
+    pos1aux = (x1,y1)
+    pos1 = pixelColor(pos1aux[0],pos1aux[1])
+    
+    pos2aux = (x2,y1)
+    pos2 = pixelColor(pos2aux[0],pos2aux[1])
 
+    pos3aux = (x3,y1)
+    pos3 = pixelColor(pos3aux[0],pos3aux[1])
+    
+    pos4aux = (x1,y2)
+    pos4 = pixelColor(pos4aux[0],pos4aux[1])
+    
+    pos5aux = (x3,y2)
+    pos5 = pixelColor(pos5aux[0],pos5aux[1])
+    
+    pos6aux = (x1,y3)
+    pos6 = pixelColor(pos6aux[0],pos6aux[1]) 
+    
+    pos7aux = (x2,y3)
+    pos7 = pixelColor(pos7aux[0],pos7aux[1])
+    
+    pos8aux = (x3,y3)
+    pos8 = pixelColor(pos8aux[0],pos8aux[1])
+    
     ######################
     if mode == "box":
-        
+
+        #count number of targets around
         targets_around = 0
-      
-        if pos1 == "000000": targets_around += 1   
-        if pos2 == "000000": targets_around += 1
-        if pos3 == "000000": targets_around += 1
-        if pos4 == "000000": targets_around += 1
-        if pos5 == "000000": targets_around += 1                
-        if pos6 == "000000": targets_around += 1        
-        if pos7 == "000000": targets_around += 1       
-        if pos8 == "000000": targets_around += 1
+        if pos1 in life_bar_colors: targets_around += 1   
+        if pos2 in life_bar_colors: targets_around += 1
+        if pos3 in life_bar_colors: targets_around += 1
+        if pos4 in life_bar_colors: targets_around += 1
+        if pos5 in life_bar_colors: targets_around += 1                
+        if pos6 in life_bar_colors: targets_around += 1        
+        if pos7 in life_bar_colors: targets_around += 1       
+        if pos8 in life_bar_colors: targets_around += 1
         
-        if targets_around >= 4: 
-            sendHotkey(atk_spell_2)
-            return
+        if targets_around >= min_to_box:
+            return 1
+        else: return 0
+        
+    ######################
+    if mode == "align":
+        
+        align_top = 0
+        if pos1 in life_bar_colors: align_top += 1
+        if pos2 in life_bar_colors: align_top += 1
+        if pos3 in life_bar_colors: align_top += 1
 
-        else:
+        align_right = 0
+        if pos3 in life_bar_colors: align_right += 1
+        if pos5 in life_bar_colors: align_right += 1
+        if pos8 in life_bar_colors: align_right += 1
 
-            if (pos1 == "000000" and pos2 == "000000" and pos3 == "000000"):
-                type(Key.UP, KeyModifier.CMD)
-                sendHotkey(atk_spell_3)
-                return
-            
-            elif (pos1 == "000000" and pos4 == "000000" and pos6 == "000000"): 
-                type(Key.LEFT, KeyModifier.CMD)
-                sendHotkey(atk_spell_3)
-                return
-            
-            elif (pos6 == "000000" and pos7 == "000000" and pos8 == "000000"):
-                type(Key.DOWN, KeyModifier.CMD)
-                sendHotkey(atk_spell_3)
-                return
-            
-            elif (pos3 == "000000" and pos5 == "000000" and pos8 == "000000"):
-                type(Key.RIGHT, KeyModifier.CMD)
-                sendHotkey(atk_spell_3)
-                return
+        align_bottom = 0
+        if pos6 in life_bar_colors: align_bottom += 1
+        if pos7 in life_bar_colors: align_bottom += 1
+        if pos8 in life_bar_colors: align_bottom += 1
+
+        align_left = 0
+        if pos1 in life_bar_colors: align_left += 1
+        if pos4 in life_bar_colors: align_left += 1
+        if pos6 in life_bar_colors: align_left += 1
+
+        #optimal_align = max(align_top,align_right,align_bottom,align_left)
+        #log("Optimal mob alignment: "+optimal_align)
+
+        if align_top >= min_to_align: 
+            type(Key.UP, KeyModifier.CMD)
+            return 1
+
+        elif align_right >= min_to_align:
+            type(Key.RIGHT, KeyModifier.CMD)
+            return 1
+        
+        elif align_bottom >= min_to_align:
+            type(Key.DOWN, KeyModifier.CMD)
+            return 1
+                    
+        elif align_left >= min_to_align:
+            type(Key.LEFT, KeyModifier.CMD)
+            return 1
+
+        else: return 0
 
     ######################
     if mode == "diagonal":
         
-        if (pos2 == "000000" or pos7 == "000000"): 
+        if (pos2 in life_bar_colors or pos7 in life_bar_colors): 
             walk = randint(1,2)
             if walk == 1: type(Key.LEFT)
             if walk == 2: type(Key.RIGHT)
-            return
-        elif (pos4 == "000000" or pos5 == "000000"): 
+            return 0
+        
+        elif (pos4 in life_bar_colors or pos5 in life_bar_colors): 
             walk = randint(1,2)
             if walk == 1: type(Key.UP)
             if walk == 2: type(Key.DOWN)
-            return
-        else: return
-    
-    if mode == "distance":
+            return 0
+        
+        else: return 0
 
-        targetLifeBar = "target_life_bar.png"
-
-        gr1 = Region(225,125,255,185)
-        gr2 = Region(449,124,252,191)
-        gr3 = Region(226,284,253,187)
-        gr4 = Region(450,284,251,187)
-        if gr1.exists(targetLifeBar,0): 
-            type(Key.RIGHT);type(Key.DOWN)
-            
-        if gr2.exists(targetLifeBar,0): 
-            type(Key.LEFT);type(Key.DOWN)
-            
-        if gr3.exists(targetLifeBar,0): 
-            type(Key.RIGHT);type(Key.UP)
-            
-        if gr4.exists(targetLifeBar,0): 
-            type(Key.LEFT);type(Key.UP)
-            
-        sleep(1)
+    #other modes
+    else: return 0    
 
 ####################################################################
 ########  ########   #######  ########  ########  ######## ########  
@@ -541,12 +616,19 @@ def drop_item(sprite,name):
             wait(0.5)
     else: return
     
-########################################################################################
-# DEBUFF
-########################################################################################
+#################################################################
+########  ######## ########  ##     ## ######## ########  ######  
+##     ## ##       ##     ## ##     ## ##       ##       ##    ## 
+##     ## ##       ##     ## ##     ## ##       ##       ##       
+##     ## ######   ########  ##     ## ######   ######    ######  
+##     ## ##       ##     ## ##     ## ##       ##             ## 
+##     ## ##       ##     ## ##     ## ##       ##       ##    ## 
+########  ######## ########   #######  ##       ##        ######  
+#################################################################
 
 def debuff_check():
-    if action_bar_region.exists(Pattern("1607028632854.png").exact(),0) or action_bar_region.exists(Pattern("1607028692864.png").exact(),0): type(utura)
+    log("Checking debuffs...")
+    if action_bar_region.exists(Pattern("utura_spell.png").exact(),0) or action_bar_region.exists(Pattern("utura_gran_spell.png").exact(),0): type(utura)
     #while debuff_region.exists("paralysed.png",0): type(haste)
     #while debuff_region.exists("food.png",0): type(food)
     #while debuff_region.exists("poison.png",0): type(exana_pox)
@@ -568,16 +650,37 @@ def script_selector_function():
     script_list = (
             "-nothing selected-",
             "Rook Mino Hell",
+            "Rook PSC",
+            "Ab Wasp Cave",
+            "Venore Amazon Camp",
+            "Edron Earth Cave",
+            "Darashia Dragons",
+            "Formorgar Mines Cults",
+            "Krailos Bug Cave -1",
+            "Laguna Island",
+            "Sea Serpent North",
             "Yalahar Mutated Tigers",
-            "Edron Bog Raider"
+            "Nibelor Crystal Spiders",
+            "Carlin Cults -1"
+            
     )
     prompt = select("Please select a script from the list","Available Scripts", options = script_list, default = script_list[0])
 
     global selected_script
-
+    
     if   prompt == script_list[1]: selected_script = "mino_hell" 
-    elif prompt == script_list[2]: selected_script = "ylr_mut_tiger"
-    elif prompt == script_list[3]: selected_script = "bog_raider_edron" 
+    elif prompt == script_list[2]: selected_script = "rook_psc"
+    elif prompt == script_list[3]: selected_script = "ab_wasp"
+    elif prompt == script_list[4]: selected_script = "amazon_camp"
+    elif prompt == script_list[5]: selected_script = "bog_raider_edron"
+    elif prompt == script_list[6]: selected_script = "darashia_dragons"
+    elif prompt == script_list[7]: selected_script = "formorgar_cults"
+    elif prompt == script_list[8]: selected_script = "krailos_bug_cave"
+    elif prompt == script_list[9]: selected_script = "laguna_island"
+    elif prompt == script_list[10]: selected_script = "sea_serpent_n"
+    elif prompt == script_list[11]: selected_script = "ylr_mut_tiger"
+    elif prompt == script_list[12]: selected_script = "ice_golem"
+    elif prompt == script_list[13]: selected_script = "carlin_cults"
     else:
         popup("The selected script is not valid, terminating execution")
         closeFrame(0)
@@ -604,9 +707,7 @@ def script_selector_function():
     global emergency_heal
     global mana_pot   
     
-    global atk_spell_1
-    global atk_spell_2
-    global atk_spell_3
+    global atk_spells
     
     global minimap_zoom
     global last_hunt_wp
@@ -625,10 +726,7 @@ def script_selector_function():
         loot_corpses = imported_script.loot_corpses
                                                             
     lure_mode     = imported_script.lure_mode
-
-    try: use_exeta = imported_script.use_exeta
-    except: use_exeta = 0
-    
+    use_exeta     = imported_script.use_exeta
     equip_ring    = imported_script.equip_ring
     equip_amulet  = imported_script.equip_amulet
     drop_vials    = imported_script.drop_vials
@@ -642,9 +740,7 @@ def script_selector_function():
     mana_pot       = imported_script.mana_pot
     
     #atk
-    atk_spell_1 = imported_script.atk_spell_1  
-    atk_spell_2 = imported_script.atk_spell_2
-    atk_spell_3 = imported_script.atk_spell_3
+    atk_spells = imported_script.atk_spells
 
     minimap_zoom    = imported_script.minimap_zoom
     last_hunt_wp    = imported_script.last_hunt_wp
@@ -663,7 +759,7 @@ def script_selector_function():
 
 #receives a message and print it onto jframe
 def log(message):
-    textArea.append(str(datetime.now().strftime("%H:%M:%S.%f - "))+str(message)+"\n")
+    textArea.append(str(datetime.now().strftime("%H:%M:%S.%f")[:-4])+" - "+str(message)+"\n")
     textArea.setCaretPosition(textArea.getDocument().getLength())
 
 def closeFrame(event):
@@ -693,9 +789,15 @@ frame.pack()
 frame.setVisible(True)
 log("Initializing bot")
 
-###############################################
-############### BOT STARTS HERE ###############
-###############################################
+##############################################
+ ######  ########    ###    ########  ######## 
+##    ##    ##      ## ##   ##     ##    ##    
+##          ##     ##   ##  ##     ##    ##    
+ ######     ##    ##     ## ########     ##    
+      ##    ##    ######### ##   ##      ##    
+##    ##    ##    ##     ## ##    ##     ##    
+ ######     ##    ##     ## ##     ##    ##    
+##############################################
 
 #generates an ID for this session
 session_id = str(datetime.now().strftime("%d%m%Y%H%M"))
@@ -740,7 +842,7 @@ def adjust_minimap_zoom():
     for i in range(0,3):
         click(Location(1240,246))
     
-        #add zoom
+    #add zoom
     for i in range(0,minimap_zoom):
         click(Location(1240,227))
 
@@ -751,30 +853,28 @@ adjust_minimap_zoom()
 if loot_type >= 1: click("loot_channel.png")
 else: click("server_log_channel.png")
 
-#start threads
+#last cast time for heals, objects and spells alike
 lastObj  = datetime.now()
-lastHeal = datetime.now()
-lastSupp = datetime.now()    
-atk_spell_1.append(datetime.now())
-atk_spell_2.append(datetime.now())
-atk_spell_3.append(datetime.now())
+lastHeal = datetime.now()   
 exeta_res.append(datetime.now())
+for atk_spell in atk_spells:
+    atk_spell.append(datetime.now())
 
-
+#start threads
 running = 1
 startHealerThread()
 if vocation > 0: startSpellCasterThread()
 
 
-##################################################################
- ######     ###    ##     ## ######## ########   #######  ######## 
-##    ##   ## ##   ##     ## ##       ##     ## ##     ##    ##    
-##        ##   ##  ##     ## ##       ##     ## ##     ##    ##    
-##       ##     ## ##     ## ######   ########  ##     ##    ##    
-##       #########  ##   ##  ##       ##     ## ##     ##    ##    
-##    ## ##     ##   ## ##   ##       ##     ## ##     ##    ##    
- ######  ##     ##    ###    ######## ########   #######     ##    
-##################################################################
+###########################################################################
+##     ##    ###    #### ##    ##    ##        #######   #######  ########  
+###   ###   ## ##    ##  ###   ##    ##       ##     ## ##     ## ##     ## 
+#### ####  ##   ##   ##  ####  ##    ##       ##     ## ##     ## ##     ## 
+## ### ## ##     ##  ##  ## ## ##    ##       ##     ## ##     ## ########  
+##     ## #########  ##  ##  ####    ##       ##     ## ##     ## ##        
+##     ## ##     ##  ##  ##   ###    ##       ##     ## ##     ## ##        
+##     ## ##     ## #### ##    ##    ########  #######   #######  ##        
+###########################################################################
 
 #Main
 while running == 1:
@@ -802,13 +902,13 @@ while running == 1:
 
             #check if should drop vials
             if drop_vials == 1: 
-                log("Looking for vials to drop...")
+                log("Searching for vials to drop...")
                 drop_item(Pattern("small_flask.png").exact(),"small empty flask")
                 drop_item(Pattern("strong_flask.png").exact(),"strong empty flask")
                 drop_item(Pattern("great_flask.png").exact(),"great empty flask")
             
             #check if it should leave the hunt
-            log("Checking for exit conditions...")
+            log("Checking exit hunt conditions...")
             label = imported_script.exit_conditions()
 
             #reset waypoint back to 1
