@@ -67,7 +67,6 @@ game_region = Region(223,121,483,353)
 ##        #### ##     ## ######## ########
 ##########################################
 
-#this function returns the color of one exact pixel on the screen (HEX format)
 def pixelColor(posX,posY):   
     pixel = Robot().getPixelColor(posX,posY)
     r = pixel.getRed()
@@ -193,7 +192,6 @@ def waypointer():
 
     #go to label refil
     elif wpList[0] == "go_refil": 
-
         label = "go_refil"
         wp = 0
 
@@ -323,95 +321,6 @@ def use_item_at_sqm(item,sqm_x,sqm_y):
 ##     ## ##     ##    ##       ##    ##       ##       
 ########  ##     ##    ##       ##    ######## ######## 
 #######################################################
-
-
-def check_battlelist3():
-
-    global flag_encounter
-    
-    slot1 = pixelColor(bl_slot1_x,bl_slot1_y)
-    log("Slot1: "+str(slot1))
-    if slot1 == "000000" and running == 1:
-
-        log("Mob detected on battle list")
-        flag_encounter = 1
-
-        type(Key.SPACE)
-        wait(0.3)
-        check_is_attacking()
-        
-        #if game_region.exists(Pattern("thereisnoway.png").similar(0.90),0): 
-        #    shutil.move(capture(game_region),os.path.join(r"/Users/GabrielMargonato/Desktop/DATASET/"+str(datetime.now().strftime("%d%m%Y%H%M"))+'.png'))
-        #    log("There is no way")
-        #    type(Key.ESC)
-        #    return
-
-        #checks if there is another mob on battle list
-        slot1 = pixelColor(bl_slot1_x,bl_slot1_y)
-        log("Slot2: "+str(slot1))
-        if slot1 == "000000" and running == 1:check_battlelist()
-        else:
-            
-            #no more mobs on battle list
-            log("Battle list is clear")
-
-            #if drop_vials == 2, drop vials immediately
-            if drop_vials == 2: drop_item_vial()
-
-            #if loot_type == 3, take loot before moving to next waypoint
-            if loot_type == 3: 
-                if game_region.exists("valuable_loot.png",0): loot_around(2)
-                else: loot_around(1)
-
-            #if dust_skill == 2, only dust/skin corpses before moving to next waypoint
-            try:
-                if dust_skin == 2: dust_creature_corpse(imported_script.corpses)
-            except: 
-                pass
-            
-    #no mob on slot1:
-    else: return
-
-#################################    
-
-def check_battlelist2():
-
-    global flag_encounter
-    target_life_bar = Pattern("target_life_bar_big.png").exact().targetOffset(-80,-5)
-     
-    if battlelist_region.exists(target_life_bar,0):
-        log("Attacking mob on battle list")
-        try: battlelist_region.click(target_life_bar)
-        except: pass
-        flag_encounter = 1
-        wait(0.3)
-        check_is_attacking()
-        
-        #checks if there is another mob on battle list
-        if battlelist_region.exists(target_life_bar,0) and running == 1: check_battlelist()
-        else:
-            
-            #no more mobs on battle list
-            log("Battle list is clear")
-
-            #if drop_vials == 2, drop vials immediately
-            if drop_vials == 2: drop_item_vial()
-
-            #if loot_type == 3, take loot before moving to next waypoint
-            if loot_type == 3: 
-                if game_region.exists("valuable_loot.png",0): loot_around(2)
-                else: loot_around(1)
-
-            #if dust_skill == 2, only dust/skin corpses before moving to next waypoint
-            try:
-                if dust_skin == 2: dust_creature_corpse(imported_script.corpses)
-            except: 
-                pass
-            
-    #no full health mob on battle list:
-    else: return
-
-#################################
 
 def check_battlelist():
 
@@ -1163,7 +1072,6 @@ while running == 1:
     if label == "hunt": check_debuffs()
     waypointer()
 
-    #test
     gc.collect()
 
 else: 
