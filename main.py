@@ -96,14 +96,13 @@ def logoff_function():
     
     if equip_region.exists("battleon.png"):
         log("Could not logoff, waiting 10 seconds...")
-        check_battlelist()
+        check_battle_list()
         wait(10)
         log("Trying to logoff again")
         logoff_function()
         
     else:
         if operational_system == "mac":
-            log("Printing Screen")
             type("3", KeyModifier.CMD + KeyModifier.SHIFT)
             type("l", KeyModifier.CMD)
         else:
@@ -129,8 +128,7 @@ def waypointer():
 
     global wp
     global label
-    global current_zoom
-    
+     
     try:
         if label == "go_hunt": wpList = imported_script.label_go_hunt(wp)
         if label == "hunt":    wpList = imported_script.label_hunt(wp)
@@ -139,93 +137,32 @@ def waypointer():
     except:
         wp+=1
         waypointer()
-
-    #walk waypoint [0:action, 1:img ,2:zoom, 3:atk]
-    if wpList[0] in ("walk","ladder","rope","shovel") and running == 1: 
-
-        if wpList[3] >= 1: check_battlelist()
-        log("Walking to "+label+" waypoint "+str(wp))
-        
-        #[0:action, 1:img ,2:zoom, 3:atk]
-        if wpList[2] != current_zoom: 
-            
-            for i in range(0,3):
-                click(Location(sub_zoom.getX(),sub_zoom.getY()))
-        
-            for i in range(0,wpList[2]):
-                click(Location(add_zoom.getX(),add_zoom.getY()))
-        
-            #update current_zoom to new value
-            current_zoom = wpList[2]
-            
-        else: pass
-        try: 
-            click(wpList[1])
-            check_is_walking(wpList[3])
-            if flag_encounter == 1: return
-            if wpList[0] in ("rope","ladder","shovel"): waypoint_action(wpList[0])
-            
-        except: log("Could not find waypoint "+label+" "+str(wp))
-        
-    #drop items waypoint
-    elif wpList[0] == "drop":
-        check_battlelist()
-        try:
-            for index, tuple in enumerate(wpList[1]):
-                sprite = tuple[0]
-                name   = tuple[1]
-                drop_item_to_sqm(sprite,name)
-        except: print "ERROR droping items"
-
-    #talk to npc waypoint
+    
+    if   wpList[0] == "walk" and running == 1: walk(wpList)
+    elif wpList[0] in ("rope","ladder","shovel"): waypoint_action(wpList[0])
+    elif wpList[0] == "drop": drop_item(wpList)
     elif wpList[0] == "talk": talk_to_npc(wpList)
-
-    #force an battle list check/attack
-    elif wpList[0] == "attack": 
-        log("Checking battle list")
-        check_battlelist()
-
-    #deposit item into depot
-    elif wpList[0] == "deposit": 
-        log("Going to deposit")
-        deposit_item(wpList[1])
-
-    #go to label refil
-    elif wpList[0] == "go_refil": 
-        label = "go_refil"
-        wp = 0
-
-    #buy items from npc
+    elif wpList[0] == "attack": check_battle_list()
+    elif wpList[0] == "deposit": deposit_item(wpList[1])
+    elif wpList[0] == "go_refil": label = "go_refil";wp = 0
     elif wpList[0] == "refil": buy_item(wpList[1],wpList[2])
-
-    #reset to label hunt and wp 1
-    elif wpList[0] == "reset":
-        next_label = imported_script.exit_conditions()
-        if next_label == "hunt":
-            log("Reseting hunt")
-            label = "go_hunt"
-            wp = 0
-        else: 
-            label = "leave"
-
-    #use item at sqm
     elif wpList[0] == "use_item": use_item_at_sqm(wpList[1],wpList[2],wpList[3])
-
+    elif wpList[0] == "reset": reset_run()
     elif wpList[0] == "pass": pass
-        
-    #not implemented waypoints       
-    else: print "ERROR:",wpList[0],"not yet implemented or not recognized",wp
+    else: print "ERROR on waypoint ",wp,"(",wpList[0],")"
        
-    #Arrived/Concluded waypoint shenanigans
+    ### Arrived/Concluded waypoint shenanigans ###
     if label == "go_hunt" and wp >= last_go_hunt_wp:
         log("Setting label to hunt")
         label = "hunt"
         wp = 1
         
     elif label == "hunt" and wp >= last_hunt_wp:
+        if drop_vials > 0 and running == 1: 
+            check_battle_list()
+            drop_item_vial()
+        log("Checking exit conditions...")
         try:
-            if drop_vials > 0: drop_item_vial()
-            log("Checking exit conditions...")
             label = imported_script.exit_conditions()
         except: 
             log("ERROR checking exit conditions, leaving hunt")       
@@ -237,11 +174,39 @@ def waypointer():
         
     else: wp+=1
 
-def check_is_walking(minTargets):
+def walk(wpList):
+#wpList = [0:action, 1:img ,2:zoom, 3:atk]   
 
+    global current_zoom
+    
+    if wpList[2] != current_zoom: 
+        
+        for i in range(0,3):
+            click(Location(sub_zoom.getX(),sub_zoom.getY()))
+    
+        for i in range(0,wpList[2]):
+            click(Location(add_zoom.getX(),add_zoom.getY()))
+    
+        #update current_zoom to new value
+        current_zoom = wpList[2]
+        
+    else: pass
+
+    log("Walking to "+label+" waypoint "+str(wp))
+    try:
+        click(wpList[1])
+        check_is_walking(wpList)
+    except: log("Could not find waypoint "+label+" "+str(wp))
+    
+def check_is_walking(wpList):
+#wpList = [0:action, 1:img ,2:zoom, 3:atk]   
+
+    global encounter
     time_stopped = 0
     
     while time_stopped != walk_interval:
+
+        if encounter == 0: return
         
         minimap_region = Region(minimap_area_x,minimap_area_y,110,115)
         minimap_region.onChange(1,changeHandler)
@@ -250,24 +215,28 @@ def check_is_walking(minTargets):
         
         #if enters here, means char is still walking
         if minimap_region.somethingChanged:
+            
             time_stopped = 0
             while equip_region.exists("paralysed.png",0): 
                 type(haste)
                 wait(0.5)
-            if minTargets >= 1: 
-                num_targets = count_targets()
-                if num_targets >= minTargets: check_battlelist()
-                else: pass
+            if wpList[3] > 0: 
+                if count_targets(wpList[3]) >= wpList[3]:  
+                    check_battle_list()
+                    if running == 1: walk(wpList)
+                    #if encounter == 1: walk(wpList)
+                else: wait(1)
             
         #if nothing changes on the screen for some time, add 1 to stopped timer
         if not minimap_region.somethingChanged:
-            if flag_encounter == 1: return
-            else:
-                time_stopped+=1
-                log("Walking "+str(time_stopped)+"/"+str(walk_interval))
+            time_stopped+=1
+            log("Walking "+str(time_stopped)+"/"+str(walk_interval))
 
-        continue
-    else: return
+    else: 
+        log("Arrived at waypoint")
+        encounter = 0
+        return
+
 
 #function to verify if something is changing on screen
 def changeHandler(event):
@@ -290,8 +259,7 @@ def waypoint_action(wp_action):
         log("Using shovel")    
 
     wait(1)
-    return
-    
+
 def use_item_at_sqm(item,sqm_x,sqm_y):
 
     if sqm_x == "x1": sqm_x = x1
@@ -312,6 +280,15 @@ def use_item_at_sqm(item,sqm_x,sqm_y):
         else: log("Could not find item. Please check if visible.")
     except: return
 
+def reset_run():
+    next_label = imported_script.exit_conditions()
+    if next_label == "hunt":
+        log("Reseting hunt")
+        label = "go_hunt"
+        wp = 0
+    else:
+        label = "leave"
+        
 #######################################################
 ########     ###    ######## ######## ##       ######## 
 ##     ##   ## ##      ##       ##    ##       ##       
@@ -322,58 +299,31 @@ def use_item_at_sqm(item,sqm_x,sqm_y):
 ########  ##     ##    ##       ##    ######## ######## 
 #######################################################
 
-def check_battlelist():
+def check_battle_list():
 
-    global flag_encounter
+    global encounter
 
-    #emulates a do-while loop
-    while running == 1:
-        if pixelColor(bl_slot1_x,bl_slot1_y) == "000000":
-            log("Attacking mob on battle list")
-            flag_encounter = 1
-            type(Key.SPACE)
-            wait(0.3)
-            check_is_attacking()
-        else: break
-
-    #no more mobs on battle list
-    log("Battle list is clear")
-
-    #if drop_vials == 2, drop vials immediately
-    if drop_vials == 2: drop_item_vial()
-
-    #if loot_type == 3, take loot before moving to next waypoint
-    if loot_type == 3: 
+    if running == 1 and pixelColor(bl_slot1_x,bl_slot1_y) == "000000": 
+        log("Attacking detected mob on battle list")
+        type(Key.SPACE)
+        wait(0.3)
+        encounter = 1
+        battlelist_region.waitVanish("bl_target.png",30)     
         if game_region.exists("valuable_loot.png",0): loot_around(2)
-        else: loot_around(1)
+        elif loot_type == 1: loot_around(1)
+        else: pass
+        check_battle_list()
 
-    #if dust_skill == 2, only dust/skin corpses before moving to next waypoint
-    try:
-        if dust_skin == 2: dust_creature_corpse(imported_script.corpses)
-    except: 
-        pass
-          
-def check_is_attacking(): 
-   
-    #waits 30 seconds before switching mob
-    battlelist_region.waitVanish("bl_target.png",30) 
-    #shutil.move(capture(game_region),os.path.join(r"/Users/GabrielMargonato/Desktop/DATASET/"+str(datetime.now().strftime("%d%m%Y%H%M"))+'.png'))
-    
-    #after mob is dead:
-    if loot_type == 1:        
-        if game_region.exists("valuable_loot.png",0): loot_around(2)
-        else: loot_around(1)
-            
-    if loot_type == 2 and game_region.exists("valuable_loot.png",0): loot_around(2)
-
-    #immediately check if must dust/skin a corpse
-    try:
-        if dust_skin == 1: dust_creature_corpse(imported_script.corpses)
-    except: 
-        pass
-
-    return
-
+    elif running == 0: return    
+    else: 
+        log("Battle list is clear")
+        if drop_vials == 2: drop_item_vial()
+        if encounter == 1 and loot_type == 3: loot_around(1)
+        if dust_skin == 1:
+            try: dust_creature_corpse(imported_script.corpses)
+            except: pass
+        return
+ 
 #####################################
 ##        #######   #######  ######## 
 ##       ##     ## ##     ##    ##    
@@ -387,7 +337,7 @@ def check_is_attacking():
 #loot_type = 0 -> ignore loot
 #loot_type = 1 -> loot everything
 #loot_type = 2 -> loot only valuable
-#loot_type = 3 -> loot only after clearing the battle list (best used with lure mode)
+#loot_type = 3 -> loot only after clearing the battle list (best used along lure mode)
 
 def loot_around(times):
     log("Looting around char ("+str(times)+")")
@@ -506,18 +456,16 @@ def start_healing_thread():
    ##    ##     ## ##     ##  ######   ########    ##   
 ########################################################
 
-def count_targets():
-    
-    #first slot of battle list
+def count_targets(slots):
+
     slot = bl_slot1_y
-   
-    #inicial number os targets
     num_targets = 0
-    
-    #cycle trought the first 8 battle list slots
-    for i in range(0,8):
-        color = pixelColor(bl_slot1_x,slot)
-        if color == "000000": num_targets+=1
+     
+    #log("Checking "+str(slots)+" slot(s)")
+    #cycle trought battle list slots
+    for i in range(slots):
+        #log("\t"+"slot "+str((i+1))+"/"+str(slots))
+        if pixelColor(bl_slot1_x,slot) == "000000": num_targets+=1
         slot += 22
 
     return num_targets
@@ -541,7 +489,7 @@ def attacking_thread(arg):
     
                 #at least 1 target to cast        
                 if atk[2] >= 1: 
-                    num_targets = count_targets()
+                    num_targets = count_targets(atk[2])
                     if num_targets >= atk[2]:
                         valid = validate_hotkey(atk[3],atk[5],atk[4])
     
@@ -563,31 +511,6 @@ def start_attacking_thread():
     else: 
         print "[ERROR] Attacking thread already running"
 
-#######################################
-########  ########   #######  ########  
-##     ## ##     ## ##     ## ##     ## 
-##     ## ##     ## ##     ## ##     ## 
-##     ## ########  ##     ## ########  
-##     ## ##   ##   ##     ## ##        
-##     ## ##    ##  ##     ## ##        
-########  ##     ##  #######  ##        
-#######################################
-
-def drop_item_vial():
-    log("Searching for vials to drop...")
-    drop_item_to_sqm(Pattern("small_flask.png").exact(),"small empty flask")
-    drop_item_to_sqm(Pattern("strong_flask.png").exact(),"strong empty flask")
-    drop_item_to_sqm(Pattern("great_flask.png").exact(),"great empty flask")
-
-def drop_item_to_sqm(sprite,name):
-    if exists(sprite,0):
-        imageCount = len(list([x for x in findAll(sprite)]))
-        for i in range(imageCount):
-            log("Dropping "+name+" "+str(i+1)+"/"+str(imageCount))
-            dragDrop(sprite, Location(gr_center_x,gr_center_y))
-            wait(0.5)
-    else: return
-
 #################################################################
 ########  ######## ########  ##     ## ######## ########  ######  
 ##     ## ##       ##     ## ##     ## ##       ##       ##    ## 
@@ -600,13 +523,49 @@ def drop_item_to_sqm(sprite,name):
 
 def check_debuffs():
     log("Checking character status")
-    while equip_region.exists("paralysed.png",0): type(haste)
-    if equip_region.exists("food.png",0): type(food)
+    #while equip_region.exists("paralysed.png",0): type(haste)
+    #if equip_region.exists("food.png",0): type(food)
     #while equip_region.exists("poison.png",0): type(exana_pox)
     if (equip_ring == 1 and equip_region.exists("ring.png",0)): type(ring)
     if (equip_amulet == 1 and equip_region.exists("amulet.png",0)): type (amulet)
     else:return
 
+#######################################
+########  ########   #######  ########  
+##     ## ##     ## ##     ## ##     ## 
+##     ## ##     ## ##     ## ##     ## 
+##     ## ########  ##     ## ########  
+##     ## ##   ##   ##     ## ##        
+##     ## ##    ##  ##     ## ##        
+########  ##     ##  #######  ##        
+#######################################
+
+def drop_item_vial():
+    log("Searching for vials to drop...")
+    try:
+        drop_item_to_sqm(Pattern("small_flask.png").exact(),"small empty flask")
+        drop_item_to_sqm(Pattern("strong_flask.png").exact(),"strong empty flask")
+        drop_item_to_sqm(Pattern("great_flask.png").exact(),"great empty flask")
+    except: log("ERROR dropping vials")
+
+def drop_item(wpList):
+    check_battle_list()
+    try:
+        for index,tuple in enumerate(wpList[1]):
+            sprite = tuple[0]
+            name   = tuple[1]
+            if exists(sprite,0): drop_item_to_sqm(sprite,name)
+    except: print "ERROR droping items"
+
+def drop_item_to_sqm(sprite,name):
+    if exists(sprite,0):
+        imageCount = len(list([x for x in findAll(sprite)]))
+        for i in range(imageCount):
+            log("Dropping "+name+" "+str(i+1)+"/"+str(imageCount))
+            dragDrop(sprite, Location(gr_center_x,gr_center_y))
+            wait(0.5)
+    else: return
+    
 ################################################################################
 ########  ######## ########   #######   ######  #### ######## ######## ########  
 ##     ## ##       ##     ## ##     ## ##    ##  ##     ##    ##       ##     ## 
@@ -629,9 +588,9 @@ def deposit_item(list_of_items):
     try:
         log("Walking to empty depot tile")
         click(Pattern("depot0.png").similar(0.35))
-        check_is_walking(0)
+        wait(walk_interval)
     except: 
-        log("Could not find empty depot tile")
+        log("Could not find an empty depot tile")
         return
     
     if exists("depot1.png",0): dp_img = "depot1.png"
@@ -648,7 +607,8 @@ def deposit_item(list_of_items):
         wait("depot4.png")
         click("depot4.png")
         log("Depositing items...")
-        for item in list_of_items: dragDrop(item,"depot5.png")
+        for item in list_of_items: 
+            while exists(item): dragDrop(item,"depot5.png")
         log("... Items successfully deposited")
         
     except: 
@@ -754,7 +714,9 @@ def script_selector_function():
             "Lb Braindeaths",
             "Sea Serpents North",
             "Sea Serpents South", 
-            "Krailos Ruins"
+            "Krailos Ruins",
+            "Feyrist Beach",
+            "Feyrist Dark Cave"
     )
     
     prompt = select("Please select a script from the list","Available Scripts", options = script_list, default = script_list[0])
@@ -768,7 +730,9 @@ def script_selector_function():
     elif prompt == script_list[5]: selected_script = "sea_serpent_n" 
     elif prompt == script_list[6]: selected_script = "sea_serpent_s" 
     elif prompt == script_list[7]: selected_script = "krailos_ruins" 
- 
+    elif prompt == script_list[8]: selected_script = "feyrist_beach"  
+    elif prompt == script_list[9]: selected_script = "feyrist_dark_cave"   
+
     else:
         popup("The selected script is not valid!")
         closeFrame(0)
@@ -867,7 +831,7 @@ def log(message):
         if textArea.getLineCount() <= 500:
             textArea.append(str(datetime.now().strftime("%H:%M:%S.%f")[:-4])+" - "+str(message)+"\n")
             textArea.setCaretPosition(textArea.getDocument().getLength())
-        else: textArea.setText("Reseting console log (more then 500 lines) \n")
+        else: textArea.setText("Reseting console log (more than 500 lines) \n")
         
 def closeFrame(event):
     global running
@@ -1016,7 +980,7 @@ bl_tlc_y = battlelist.getTopLeft().getY()
 bl_slot1_x = bl_tlc_x + 26
 bl_slot1_y = bl_tlc_y + 33
 
-battlelist_region = Region(bl_tlc_x,bl_tlc_y,160,200)
+battlelist_region = Region(bl_tlc_x,bl_tlc_y,40,200)
 
 #LIFE AND MANA INFORMATION
 
@@ -1064,15 +1028,18 @@ running = 1
 #starts healing and attacking threads (if vocation > 0)
 start_healing_thread()
 if vocation > 0: start_attacking_thread()
+print " "
 
 while running == 1:
-    
-    flag_encounter = 0
-    if lure_mode == 1 and label == "hunt":  check_battlelist()
-    if label == "hunt": check_debuffs()
+
+    encounter = -1
+    if label == "hunt": 
+        check_battle_list()
+        check_debuffs()
+        
     waypointer()
 
-    gc.collect()
+    #gc.collect()
 
 else: 
     popup("END")
