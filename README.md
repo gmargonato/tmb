@@ -1,1 +1,1 @@
-A tibia bot built in Jython
+Game Master
